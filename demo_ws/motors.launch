@@ -1,0 +1,11 @@
+<launch>
+
+	<node pkg="driver_motors" type="motor" name="motor">
+	</node>
+
+
+	<node pkg="driver_motors" type="controller" name="controller">
+	</node>
+
+
+</launch>
