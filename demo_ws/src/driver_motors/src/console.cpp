@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 			break;	
 	}
 
-    printw("Console controls: {%.1f, %.1f, %.1f}\n", msg.x, msg.y, msg.z);
+  //  printw("Console controls: {%.1f, %.1f, %.1f}\n", msg.x, msg.y, msg.z);
     
     remote_pub.publish(msg);
 

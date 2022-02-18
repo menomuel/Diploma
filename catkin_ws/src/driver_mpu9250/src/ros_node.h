@@ -66,6 +66,7 @@ private:
 
     // TODO: CUSTOM PUPLISHER
     ros::Publisher m_publisher_imu_data;
+    ros::Publisher m_publisher_imu_data_unfilter;
 
     // SERVICES
     /// \brief Service server for calibrating the gyroscope.

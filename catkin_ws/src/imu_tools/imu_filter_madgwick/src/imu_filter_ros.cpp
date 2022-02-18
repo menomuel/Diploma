@@ -28,11 +28,12 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 
+
 ImuFilterRos::ImuFilterRos(ros::NodeHandle nh, ros::NodeHandle nh_private):
   nh_(nh),
   nh_private_(nh_private),
   initialized_(false)
-{
+{	
   ROS_INFO ("Starting ImuFilter");
 
   // **** get paramters
@@ -371,7 +372,7 @@ void ImuFilterRos::publishFilteredMsg(const ImuMsg::ConstPtr& imu_msg_raw)
     imu_msg->linear_acceleration.y -= gy;
     imu_msg->linear_acceleration.z -= gz;
   }
-
+  
   imu_publisher_.publish(imu_msg);
 
   if(publish_debug_topics_)

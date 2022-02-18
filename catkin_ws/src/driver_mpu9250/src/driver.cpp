@@ -335,7 +335,7 @@ void driver::read_data()
     char magneto_buffer[7];
     try
     {
-        read_ak8963_registers(driver::register_ak8963_type::X_LOW, 7, magneto_buffer);
+        ///read_ak8963_registers(driver::register_ak8963_type::X_LOW, 7, magneto_buffer);
     }
     catch(const std::exception& e)
     {

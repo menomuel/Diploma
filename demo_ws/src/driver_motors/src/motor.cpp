@@ -5,7 +5,8 @@
 #include <iostream>
 
 #include <geometry_msgs/Point.h>
-#include <geometry_msgs/Quaternion.h>
+#include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/QuaternionStamped.h>
 
 #include <pigpiod_if2.h>
 
@@ -25,7 +26,7 @@ static const int pin2 = 13; //12
 static const int pin3 = 21; //25
 static const int pin4 = 27; //23
 
-static const int pwm_freq = 200;
+static const int pwm_freq = 400;
 static const int pwm_range = 255;
 
 static const int MIN_WIDTH = 1150;
@@ -42,14 +43,14 @@ double remote_u3 = 0;
 
 int pi = -1;
 
-static int fd;
+static int fd1;
 
 //static geometry_msgs::Quaternion pwm_msg;
 //ros::Publisher pwm_pub = n.advertise<geometry_msgs::Quaternion>("pwm", 0);
 
 void pwm(int width, int sleep=0)
 {
-	/*
+	
 	if (width != 0)
 	{
 		if (width >= CEIL_WIDTH)
@@ -57,9 +58,7 @@ void pwm(int width, int sleep=0)
 		else if (width <= FLOOR_WIDTH)
 			width = FLOOR_WIDTH;
 	}	
-	*/
-	//if (width >= remote_pwm)
-	//	width = remote_pwm;
+	
 		
 	if (lockFlag)
 	{
@@ -68,7 +67,7 @@ void pwm(int width, int sleep=0)
 	}
 	
 	unsigned dutycycle = static_cast<unsigned>(width/1000000. * pwm_freq * pwm_range);
-	ROS_INFO_STREAM("pwm: " << width << "\ndutycycle: " << dutycycle << "\nrange: " << pwm_range << "\nfreq: " << pwm_freq);
+	//ROS_INFO_STREAM("pwm: " << width << "\ndutycycle: " << dutycycle << "\nrange: " << pwm_range << "\nfreq: " << pwm_freq);
 	
 	//ROS_INFO_STREAM("pwm: " << width);
 	set_PWM_dutycycle(pi, pin1, dutycycle);
@@ -82,20 +81,25 @@ void pwm(int width, int sleep=0)
 }
 
 void pwmSingle(int pin, int width, int sleep=0)
-{/*
-	if (width >= CEIL_WIDTH)
-		width = CEIL_WIDTH;
-	else if (width <= FLOOR_WIDTH)
-		width = FLOOR_WIDTH;
-	*/
+{
+	if (width != 0)
+	{
+		if (width >= CEIL_WIDTH)
+			width = CEIL_WIDTH;
+		else if (width <= FLOOR_WIDTH)
+			width = FLOOR_WIDTH;
+	}
+	
 	if (lockFlag)
 	{
 		width = 0;
 	    ROS_INFO_STREAM("Abort... Motors locked\n");
 	}
 	
-	//ROS_INFO_STREAM("pwm: " << width);
-	set_servo_pulsewidth(pi, pin, width);
+	unsigned dutycycle = static_cast<unsigned>(width/1000000. * pwm_freq * pwm_range);
+	
+	//ROS_INFO_STREAM("pwm: " << width << " dutycycle: " << dutycycle << "\n");
+	set_PWM_dutycycle(pi, pin, dutycycle);
 	
 	if (sleep)
 		std::this_thread::sleep_for(std::chrono::seconds(sleep));
@@ -130,19 +134,11 @@ void disarm()
 	ROS_INFO_STREAM("Disarmed");
 }
 
-/**
- * This tutorial demonstrates simple receipt of messages over the ROS system.
- */
 
-void controlsCallback(const geometry_msgs::Point& msg)
+void controlsCallback(const geometry_msgs::PointStamped& msg)
 {
-  /*
-  pwm(msg.x, 0);
-  ROS_INFO("Motors PWM signal: {%.1f}", msg.x);
-  */
-  
   double l = 0.12; // [m]
-  double k = 0.5; //0.15;
+  double k = 0.1; //0.15;
   
   Eigen::Matrix4d mat;
   mat << 1./4,  k/(4*l), -k/(4*l), -1./(4*k),
@@ -157,14 +153,12 @@ void controlsCallback(const geometry_msgs::Point& msg)
   //		   -k,  k,   -k,  k;
   
 
-  Eigen::Vector4d u(msg.x, msg.y, msg.z, 0.);
-  //u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
-  //u[1] = 0;
-  //u[2] = 0;
-  //u[1] += remote_u2; // Equality!
-  //u[2] += remote_u3; // Equality!
+  Eigen::Vector4d u(msg.point.x, msg.point.y, msg.point.z, 0.);
   
-  /*
+  u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
+  u[1] += remote_u2; // Equality!
+  u[2] += remote_u3; // Equality!
+  
   double ulim = 3; //0.7
   double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);
   
@@ -173,33 +167,18 @@ void controlsCallback(const geometry_msgs::Point& msg)
 	u[1] *= ulim / unorm;
 	u[2] *= ulim / unorm;
   } 
-  */
-  /*
-  if (u[1] > ulim)
-	u[1] = ulim;
-  else if (u[1] < -ulim)
-	u[1] = -ulim;
-
-  if (u[2] > ulim)
-	u[2] = ulim;
-  else if (u[2] < -ulim)
-	u[2] = -ulim;
-   */
    
-  //ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
+ // ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
   //ROS_INFO_STREAM("Controls:\n" << u);    
       
       
   Eigen::Vector4d F = mat * u;
   //ROS_INFO_STREAM("Forces:\n" << F);
-
 	
   // pwm = coef * F + bias
   double bias = 1194.1;
   double coef = 157.5;
   
-  // TODO: pin order!
-  /*
   double pwm0 = F(0)*coef+bias;
   double pwm1 = F(1)*coef+bias;
   double pwm2 = F(2)*coef+bias;
@@ -208,25 +187,35 @@ void controlsCallback(const geometry_msgs::Point& msg)
   pwmSingle(pin1, pwm0, 0);
   pwmSingle(pin2, pwm1, 0);
   pwmSingle(pin3, pwm2, 0);
-  pwmSingle(pin4, pwm3, 0);
+  pwmSingle(pin4, pwm3, 0);	
+
+  /*
+  geometry_msgs::QuaternionStamped pwm_msg;
+  pwm_msg.header.stamp = ros::Time::now();
+  pwm_msg.quaternion.x = pwm0;
+  pwm_msg.quaternion.y = pwm1;
+  pwm_msg.quaternion.z = pwm2;
+  pwm_msg.quaternion.w = pwm3;
   */
+	
+  /*
   double PWM = 0;
-  if (u[2] > 2)
+  if (u[2] > 3)
+  {
 	PWM = 1500;
-	
-	
-	/*
+  }
+  
   if (PWM > 1000)
   {
 		
-		ssize_t stat = write(fd, "A", 1);
-		if (stat < 0)
-			fprintf(stderr, "Unable to write to Serial port %d\n", fd);
-		ROS_INFO_STREAM("id: " << u[1] << " time: " << ros::Time::now());  
+		ssize_t stat1 = write(fd1, "A", 1);
+		if (stat1 < 0)
+			fprintf(stderr, "Unable to write to Serial port 1 %d\n", fd1);
   }
-  */
+  
   
   pwm(PWM, 0);
+  */
 }
 
 void remoteCallback(const geometry_msgs::Point& msg)
@@ -241,13 +230,13 @@ void remoteCallback(const geometry_msgs::Point& msg)
 
 int main(int argc, char **argv)
 {
-	fd = open("/dev/ttyUSB0", O_WRONLY | O_NOCTTY | O_NDELAY);
-	if (fd == -1)
+	fd1 = open("/dev/ttyUSB0", O_WRONLY);
+	if (fd1 == -1)
 	{
 		fprintf(stderr, "open_port: Unable to open /dev/ttyUSB0");
 	} else
 	{
-		fcntl(fd, F_SETFL, 0);
+		fcntl(fd1, F_SETFL, 0);
 	}
 	
 	pi = pigpio_start(0,0);
@@ -271,6 +260,9 @@ int main(int argc, char **argv)
 	//return 0;
   
 	arm();
+	//pwm(1200, 10);
+	//pwm(0, 0);
+	//return 0;
 
 	/**
 	* The ros::init() function needs to see argc and argv so that it can perform

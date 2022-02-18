@@ -24,16 +24,17 @@
 #include <termios.h> /* POSIX terminal control definitions */
 
 
-static int fd, id; /* File descriptor for the port */
-static std::chrono::time_point<std::chrono::system_clock> t1, t2;
+static int fd, id, fd1; /* File descriptor for the port */
+static ros::Time startTime, currTime;
 
 // CONSTRUCTORS
 ros_node::ros_node(std::shared_ptr<driver> driver, int argc, char **argv)
 {
-	t1 = std::chrono::system_clock::now();
+	ros::Time::init();
+	startTime = ros::Time::now();
 	id = 0;
 	
-	fd = open("/dev/ttyS0", O_WRONLY | O_NOCTTY | O_NDELAY);
+	fd = open("/dev/ttyS0", O_WRONLY);
 	if (fd == -1)
 	{
 		fprintf(stderr, "open_port: Unable to open /dev/ttyS0");
@@ -95,6 +96,7 @@ ros_node::ros_node(std::shared_ptr<driver> driver, int argc, char **argv)
     ros_node::m_publisher_temperature = ros_node::m_node->advertise<sensor_msgs_ext::temperature>("imu/temperature", 1);
     //TODO: CUSTOM ADVERTISE
     ros_node::m_publisher_imu_data = ros_node::m_node->advertise<sensor_msgs::Imu>("imu/data_raw", 1);
+    //ros_node::m_publisher_imu_data_unfilter = ros_node::m_node->advertise<sensor_msgs::Imu>("imu/data_raw_unfilter", 1);
 
     // Initialize the driver and set parameters.
     try
@@ -211,11 +213,13 @@ void ros_node::deinitialize_driver()
     }
 }
 
+
 // CALLBACKS
 void ros_node::data_callback(driver::data data)
 {
    // TODO: CUSTOM MESSAGE
     sensor_msgs::Imu message_imu_data;
+    //sensor_msgs::Imu message_imu_data_unfilter;
 
     message_imu_data.header.stamp = ros::Time::now();
     message_imu_data.header.frame_id = "raw_data";
@@ -259,9 +263,16 @@ void ros_node::data_callback(driver::data data)
     //						message_imu_data.angular_velocity.z);
 
     // TODO: CUSTOM SET GYRO
+    
+    
     message_imu_data.angular_velocity.x = message_gyro.x;
     message_imu_data.angular_velocity.y = message_gyro.y;
     message_imu_data.angular_velocity.z = message_gyro.z;
+    
+    //message_imu_data_unfilter = message_imu_data;
+    //message_imu_data_unfilter.angular_velocity.x = message_gyro.x;
+    //message_imu_data_unfilter.angular_velocity.y = message_gyro.y;
+    //message_imu_data_unfilter.angular_velocity.z = message_gyro.z;
 
     // Publish message.
     //ros_node::m_publisher_gyroscope.publish(message_gyro);
@@ -289,25 +300,29 @@ void ros_node::data_callback(driver::data data)
     message_temp.temperature = static_cast<double>(data.temp);
     // Publish temperature message.
     //ros_node::m_publisher_temperature.publish(message_temp);
-    
-		
-	t2 = std::chrono::system_clock::now();
-	auto diff = std::chrono::duration<double>(t2 - t1).count();
-	if(diff > 0.2)
+	
+	/*
+	currTime = ros::Time::now();	
+	if((currTime-startTime).toSec() >= 0.02)
 	{
+		startTime = currTime;
+		
 		ssize_t stat = write(fd, "A", 1);
 		if (stat < 0)
 			fprintf(stderr, "Unable to write to Serial port %d\n", fd);
-		
+	
 		message_imu_data.angular_velocity.x = id;
 		message_imu_data.angular_velocity.y = 5.;
-		ROS_INFO_STREAM("id: " << id << " time: " << ros::Time::now());  
+		//ROS_INFO_STREAM("id: " << id << " time: " << ros::Time::now());  
 		
-		t1 += std::chrono::milliseconds(200);
+		//t1 += std::chrono::milliseconds(10);
 		id += 1;
 		//std::cout << "diff: " << diff << std::endl;
 	}
+	*/
+	
 	
 	// TODO: CUSTOM PUBLISH DATA
+	//ros_node::m_publisher_imu_data_unfilter.publish(message_imu_data_unfilter);
     ros_node::m_publisher_imu_data.publish(message_imu_data);
 }
