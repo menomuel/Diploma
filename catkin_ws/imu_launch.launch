@@ -1,11 +1,24 @@
 <launch>
 	<node pkg="driver_mpu9250" type="driver_mpu9250_rpi" name="driver_mpu9250">
-		<param name="interrupt_gpio_pin" value="18"/>
-		<param name="gyro_dlpf_frequency" value="5"/>
+		<param name="interrupt_gpio_pin" value="14"/>
+		<param name="gyro_dlpf_frequency" value="0"/>
+		<param name="accel_dlpf_frequency" value="0"/>
+		<param name="accel_fsr" value="1"/>
 	</node>
 
+	
 	<node pkg="imu_filter_madgwick" type="imu_filter_node" name="imu_filter">
 		<param name="use_mag" value="false"/>
 		<param name="publish_debug_topics" value="true"/>
 	</node>
+	
+
+	<?ignore
+	<node pkg="imu_complementary_filter" type="complementary_filter_node" name="imu_filter">
+		<param name="use_mag" value="false"/>
+		<param name="publish_debug_topics" value="true"/>
+		<param name="gain_acc" value="0.1"/>
+	</node>
+	?>
+
 </launch>

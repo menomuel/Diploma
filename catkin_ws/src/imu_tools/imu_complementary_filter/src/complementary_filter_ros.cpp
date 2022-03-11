@@ -46,7 +46,7 @@ ComplementaryFilterROS::ComplementaryFilterROS(
   ROS_INFO("Starting ComplementaryFilterROS");
   initializeParams();
 
-  int queue_size = 5;
+  int queue_size = 1;
 
   // Register publishers:
   imu_publisher_ = nh_.advertise<sensor_msgs::Imu>(ros::names::resolve("imu") + "/data", queue_size);

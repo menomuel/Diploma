@@ -34,7 +34,7 @@ ros_node::ros_node(std::shared_ptr<driver> driver, int argc, char **argv)
 	startTime = ros::Time::now();
 	id = 0;
 	
-	fd = open("/dev/ttyS0", O_WRONLY);
+	fd = open("/dev/ttyUSB0", O_WRONLY);
 	if (fd == -1)
 	{
 		fprintf(stderr, "open_port: Unable to open /dev/ttyS0");
@@ -108,6 +108,7 @@ ros_node::ros_node(std::shared_ptr<driver> driver, int argc, char **argv)
         // Set parameters.
         ///ROS_INFO_STREAM("param_gyro_dlpf_frequency: " << param_gyro_dlpf_frequency << "\nparam_accel_dlpf_frequency: " << param_accel_dlpf_frequency << "\nparam_max_data_rate: " << param_max_data_rate << "\n");
         
+        //float data_rate = -1;
         float data_rate = ros_node::m_driver->p_dlpf_frequencies(static_cast<driver::gyro_dlpf_frequency_type>(param_gyro_dlpf_frequency), static_cast<driver::accel_dlpf_frequency_type>(param_accel_dlpf_frequency), param_max_data_rate);
         ros_node::m_driver->p_gyro_fsr(static_cast<driver::gyro_fsr_type>(param_gyro_fsr));
         ros_node::m_driver->p_accel_fsr(static_cast<driver::accel_fsr_type>(param_accel_fsr));
@@ -237,6 +238,10 @@ void ros_node::data_callback(driver::data data)
     //ros_node::m_calibration_accelerometer.calibrate(message_imu_data.linear_acceleration.x,
     //						 message_imu_data.linear_acceleration.y,
     //						 message_imu_data.linear_acceleration.z);
+    
+    // Publish message.
+    ros_node::m_publisher_accelerometer.publish(message_accel);
+    
     // TODO: CUSTOM SET ACCEL
     message_imu_data.linear_acceleration.x = message_accel.x;
     message_imu_data.linear_acceleration.y = message_accel.y;
@@ -303,7 +308,7 @@ void ros_node::data_callback(driver::data data)
 	
 	/*
 	currTime = ros::Time::now();	
-	if((currTime-startTime).toSec() >= 0.02)
+	if((currTime-startTime).toSec() >= 0.2)
 	{
 		startTime = currTime;
 		
@@ -312,7 +317,7 @@ void ros_node::data_callback(driver::data data)
 			fprintf(stderr, "Unable to write to Serial port %d\n", fd);
 	
 		message_imu_data.angular_velocity.x = id;
-		message_imu_data.angular_velocity.y = 5.;
+		message_imu_data.angular_velocity.y = 8.;
 		//ROS_INFO_STREAM("id: " << id << " time: " << ros::Time::now());  
 		
 		//t1 += std::chrono::milliseconds(10);

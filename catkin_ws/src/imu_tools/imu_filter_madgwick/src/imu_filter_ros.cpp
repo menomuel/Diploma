@@ -107,20 +107,20 @@ ImuFilterRos::ImuFilterRos(ros::NodeHandle nh, ros::NodeHandle nh_private):
 
   // **** register publishers
   imu_publisher_ = nh_.advertise<sensor_msgs::Imu>(
-    ros::names::resolve("imu") + "/data", 5);
+    ros::names::resolve("imu") + "/data", 1);
 
   if (publish_debug_topics_)
   {
     rpy_filtered_debug_publisher_ = nh_.advertise<geometry_msgs::Vector3Stamped>(
-      ros::names::resolve("imu") + "/rpy/filtered", 5);
+      ros::names::resolve("imu") + "/rpy/filtered", 1);
 
     rpy_raw_debug_publisher_ = nh_.advertise<geometry_msgs::Vector3Stamped>(
-      ros::names::resolve("imu") + "/rpy/raw", 5);
+      ros::names::resolve("imu") + "/rpy/raw", 1);
   }
 
   // **** register subscribers
   // Synchronize inputs. Topic subscriptions happen on demand in the connection callback.
-  int queue_size = 5;
+  int queue_size = 1;
 
   imu_subscriber_.reset(new ImuSubscriber(
     nh_, ros::names::resolve("imu") + "/data_raw", queue_size));
@@ -404,6 +404,9 @@ void ImuFilterRos::reconfigCallback(FilterConfig& config, uint32_t level)
   boost::mutex::scoped_lock lock(mutex_);
   gain = config.gain;
   zeta = config.zeta;
+  
+  // Custom gain
+  gain = 0.1;
   filter_.setAlgorithmGain(gain);
   filter_.setDriftBiasGain(zeta);
   ROS_INFO("Imu filter gain set to %f", gain);

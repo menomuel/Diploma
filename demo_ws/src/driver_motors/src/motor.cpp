@@ -41,6 +41,8 @@ double remote_u1 = 0;
 double remote_u2 = 0;
 double remote_u3 = 0;
 
+geometry_msgs::PointStamped controls_msg; 
+
 int pi = -1;
 
 static int fd1;
@@ -137,85 +139,90 @@ void disarm()
 
 void controlsCallback(const geometry_msgs::PointStamped& msg)
 {
-  double l = 0.12; // [m]
-  double k = 0.1; //0.15;
-  
-  Eigen::Matrix4d mat;
-  mat << 1./4,  k/(4*l), -k/(4*l), -1./(4*k),
-  		 1./4,  k/(4*l),  k/(4*l),  1./(4*k),
-  		 1./4, -k/(4*l),  k/(4*l), -1./(4*k),
-  		 1./4, -k/(4*l), -k/(4*l),  1./(4*k);
-  
-  //INVERSE
-  //mat <<    1.,  1.,  1.,  1.,
-  //		   l,   l,  -l,  -l,
-  //		   -l,  l,  l,   -l,
-  //		   -k,  k,   -k,  k;
-  
+	//controls_msg = msg;
 
-  Eigen::Vector4d u(msg.point.x, msg.point.y, msg.point.z, 0.);
-  
-  u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
-  u[1] += remote_u2; // Equality!
-  u[2] += remote_u3; // Equality!
-  
-  double ulim = 3; //0.7
-  double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);
-  
-  if (unorm > ulim)
-  {
-	u[1] *= ulim / unorm;
-	u[2] *= ulim / unorm;
-  } 
-   
- // ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
-  //ROS_INFO_STREAM("Controls:\n" << u);    
-      
-      
-  Eigen::Vector4d F = mat * u;
-  //ROS_INFO_STREAM("Forces:\n" << F);
-	
-  // pwm = coef * F + bias
-  double bias = 1194.1;
-  double coef = 157.5;
-  
-  double pwm0 = F(0)*coef+bias;
-  double pwm1 = F(1)*coef+bias;
-  double pwm2 = F(2)*coef+bias;
-  double pwm3 = F(3)*coef+bias;
-  
-  pwmSingle(pin1, pwm0, 0);
-  pwmSingle(pin2, pwm1, 0);
-  pwmSingle(pin3, pwm2, 0);
-  pwmSingle(pin4, pwm3, 0);	
+	double l = 0.12; // [m]
+	double k = 0.1; //0.15;
 
-  /*
-  geometry_msgs::QuaternionStamped pwm_msg;
-  pwm_msg.header.stamp = ros::Time::now();
-  pwm_msg.quaternion.x = pwm0;
-  pwm_msg.quaternion.y = pwm1;
-  pwm_msg.quaternion.z = pwm2;
-  pwm_msg.quaternion.w = pwm3;
-  */
+	Eigen::Matrix4d mat;
+	mat << 1./4,  k/(4*l), -k/(4*l), -1./(4*k),
+		 1./4,  k/(4*l),  k/(4*l),  1./(4*k),
+		 1./4, -k/(4*l),  k/(4*l), -1./(4*k),
+		 1./4, -k/(4*l), -k/(4*l),  1./(4*k);
+
+	//INVERSE
+	//mat <<    1.,  1.,  1.,  1.,
+	//		   l,   l,  -l,  -l,
+	//		   -l,  l,  l,   -l,
+	//		   -k,  k,   -k,  k;
+
+
+	Eigen::Vector4d u(msg.point.x, msg.point.y, msg.point.z, 0.);
+
+	u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
+	u[1] += remote_u2; // Equality!
+	u[2] += remote_u3; // Equality!
+
+	double ulim = 3; //0.7
+	double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);
+
 	
-  /*
-  double PWM = 0;
-  if (u[2] > 3)
-  {
+	if (unorm > ulim)
+	{
+		u[1] *= ulim / unorm;
+		u[2] *= ulim / unorm;
+	} 
+	
+
+	// ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
+	//ROS_INFO_STREAM("Controls:\n" << u);    
+	  
+	  
+	Eigen::Vector4d F = mat * u;
+	//ROS_INFO_STREAM("Forces:\n" << F);
+
+	// pwm = coef * F + bias
+	double bias = 1194.1;
+	double coef = 157.5;
+
+	double pwm0 = F(0)*coef+bias;
+	double pwm1 = F(1)*coef+bias;
+	double pwm2 = F(2)*coef+bias;
+	double pwm3 = F(3)*coef+bias;
+
+
+	pwmSingle(pin1, pwm0, 0);
+	pwmSingle(pin2, pwm1, 0);
+	pwmSingle(pin3, pwm2, 0);
+	pwmSingle(pin4, pwm3, 0);	
+
+	
+	//geometry_msgs::QuaternionStamped pwm_msg;
+	//pwm_msg.header.stamp = ros::Time::now();
+	//pwm_msg.quaternion.x = pwm0;
+	//pwm_msg.quaternion.y = pwm1;
+	//pwm_msg.quaternion.z = pwm2;
+	//pwm_msg.quaternion.w = pwm3;
+	
+
+	/*
+	double PWM = 0;
+	if (u[2] > 5)
+	{
 	PWM = 1500;
-  }
-  
-  if (PWM > 1000)
-  {
-		
-		ssize_t stat1 = write(fd1, "A", 1);
-		if (stat1 < 0)
-			fprintf(stderr, "Unable to write to Serial port 1 %d\n", fd1);
-  }
-  
-  
-  pwm(PWM, 0);
-  */
+	}
+	//ROS_INFO("In driver u[2] = %f\n", u[2]);
+	
+	//if (PWM > 1000)
+	//{
+	//	ROS_INFO("Hi");
+	//	ssize_t stat1 = write(fd1, "A", 1);
+	//	if (stat1 < 0)
+	//	fprintf(stderr, "Unable to write to Serial port 1 %d\n", fd1);
+	//}
+	
+	pwm(PWM, 0);
+	*/
 }
 
 void remoteCallback(const geometry_msgs::Point& msg)
@@ -300,6 +307,8 @@ int main(int argc, char **argv)
 	*/
 	ros::Subscriber subControls = n.subscribe("controls", 1, controlsCallback); 
 	ros::Subscriber subRemote = n.subscribe("remote", 1, remoteCallback);
+	
+	ros::Publisher pwm_pub = n.advertise<geometry_msgs::QuaternionStamped>("/pwm", 1);
 
 	/**
 	* ros::spin() will enter a loop, pumping callbacks.  With this version, all
@@ -307,6 +316,99 @@ int main(int argc, char **argv)
 	* will exit when Ctrl-C is pressed, or the node is shutdown by the master.
 	*/
 	ros::spin();
+	
+	/*
+	while (ros::ok())
+	{
+		ros::spinOnce();	
+		
+		double l = 0.12; // [m]
+		double k = 0.1; //0.15;
+
+		Eigen::Matrix4d mat;
+		mat << 1./4,  k/(4*l), -k/(4*l), -1./(4*k),
+			 1./4,  k/(4*l),  k/(4*l),  1./(4*k),
+			 1./4, -k/(4*l),  k/(4*l), -1./(4*k),
+			 1./4, -k/(4*l), -k/(4*l),  1./(4*k);
+
+		Eigen::Vector4d u(controls_msg.point.x, controls_msg.point.y, controls_msg.point.z, 0.);
+
+		u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
+		u[1] += remote_u2; // Equality!
+		u[2] += remote_u3; // Equality!
+
+		double ulim = 3; //0.7
+		double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);
+
+		
+		//if (unorm > ulim)
+		//{
+		//u[1] *= ulim / unorm;
+		//u[2] *= ulim / unorm;
+		//} 
+		
+
+		// ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
+		//ROS_INFO_STREAM("Controls:\n" << u);    
+		  
+		  
+		Eigen::Vector4d F = mat * u;
+		//ROS_INFO_STREAM("Forces:\n" << F);
+
+		// pwm = coef * F + bias
+		double bias = 1194.1;
+		double coef = 157.5;
+
+		double pwm0 = F(0)*coef+bias;
+		double pwm1 = F(1)*coef+bias;
+		double pwm2 = F(2)*coef+bias;
+		double pwm3 = F(3)*coef+bias;
+
+
+		//pwmSingle(pin1, pwm0, 0);
+		//pwmSingle(pin2, pwm1, 0);
+		//pwmSingle(pin3, pwm2, 0);
+		//pwmSingle(pin4, pwm3, 0);	
+
+		
+		//geometry_msgs::QuaternionStamped pwm_msg;
+		//pwm_msg.header.stamp = ros::Time::now();
+		//pwm_msg.quaternion.x = pwm0;
+		//pwm_msg.quaternion.y = pwm1;
+		//pwm_msg.quaternion.z = pwm2;
+		//pwm_msg.quaternion.w = pwm3;
+		
+
+		
+		double PWM = 0;
+		if (u[2] > 5)
+		{
+		PWM = 1500;
+		}
+		//ROS_INFO("In driver u[2] = %f\n", u[2]);
+		
+		//if (PWM > 1000)
+		//{
+		//	ROS_INFO("Hi");
+		//	ssize_t stat1 = write(fd1, "A", 1);
+		//	if (stat1 < 0)
+		//	fprintf(stderr, "Unable to write to Serial port 1 %d\n", fd1);
+		//}
+		
+		pwm(PWM, 0);
+
+		
+		geometry_msgs::QuaternionStamped pwm_msg;
+		pwm_msg.header.stamp = ros::Time::now();
+		pwm_msg.quaternion.x = pwm0;
+		pwm_msg.quaternion.y = pwm1;
+		pwm_msg.quaternion.z = pwm2;
+		pwm_msg.quaternion.w = pwm3;	
+		
+		pwm_pub.publish(pwm_msg);
+	}
+	*/
+	
 
 	return 0;
 }

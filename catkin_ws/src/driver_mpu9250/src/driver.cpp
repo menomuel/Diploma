@@ -82,6 +82,20 @@ void driver::initialize(unsigned int i2c_bus, unsigned int i2c_address, unsigned
 
     // Power on magnetometer at 16bit resolution with 100Hz sample rate.
     write_ak8963_register(register_ak8963_type::CONTROL_1, 0x16);
+    
+    /// MY EXPERIMENT
+    /*
+    char accel_fs_sel = 0x00;
+    char gyro_fs_sel = 0x00;
+    char accel_filter_freq = 0x01;
+    char gyro_filter_freq = 0x01;
+    
+    write_mpu9250_register(register_mpu9250_type::ACCEL_CONFIG, accel_fs_sel); // HARDCODE (4g) RANGE
+    write_mpu9250_register(register_mpu9250_type::GYRO_CONFIG, gyro_fs_sel); // gyro scale to 500 °/s and FCHOICE_B
+    write_mpu9250_register(register_mpu9250_type::ACCEL_CONFIG_2, accel_filter_freq); // low-pass filter for accelerometer with 10.2Hz bandwidth
+    write_mpu9250_register(register_mpu9250_type::CONFIG, gyro_filter_freq); // low-pass filter for gyroscope with 10Hz bandwidth
+    */
+    
 }
 void driver::deinitialize()
 {
@@ -270,7 +284,9 @@ void driver::p_gyro_fsr(gyro_fsr_type fsr)
 void driver::p_accel_fsr(accel_fsr_type fsr)
 {
     // Write accel FSR to register.
-    write_mpu9250_register(register_mpu9250_type::ACCEL_CONFIG, static_cast<unsigned char>(fsr));
+       
+    //write_mpu9250_register(register_mpu9250_type::ACCEL_CONFIG, static_cast<unsigned char>(fsr));
+    write_mpu9250_register(register_mpu9250_type::ACCEL_CONFIG, static_cast<unsigned char>(int(fsr) << 3)); // [4:3] ACCEL_FS_SEL[1:0]
 
     // Store the fsr.
     switch(fsr)
@@ -295,7 +311,7 @@ void driver::p_accel_fsr(accel_fsr_type fsr)
         driver::m_accel_fsr = 16.0f;
         break;
     }
-    }
+	}
 }
 
 // METHODS
@@ -319,7 +335,7 @@ void driver::read_data()
     // Parse out accel data.
     data.accel_x = driver::m_accel_fsr * static_cast<float>(static_cast<short>(be16toh(*reinterpret_cast<unsigned short*>(&atg_buffer[0])))) / 32768.0f;
     data.accel_y = driver::m_accel_fsr * static_cast<float>(static_cast<short>(be16toh(*reinterpret_cast<unsigned short*>(&atg_buffer[2])))) / 32768.0f;
-    data.accel_z = driver::m_accel_fsr * static_cast<float>(static_cast<short>(be16toh(*reinterpret_cast<unsigned short*>(&atg_buffer[4])))) / 32768.0f;
+    data.accel_z = driver::m_accel_fsr * static_cast<float>(static_cast<short>(be16toh(*reinterpret_cast<unsigned short*>(&atg_buffer[4])))) / 32768.0f; 
 
     // Parse out temperature data.
     // Formula is DegC = ((raw - roomtemp_offset)/temp_sensitivity) + 21
