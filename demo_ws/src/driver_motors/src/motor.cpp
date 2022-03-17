@@ -146,9 +146,9 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 
 	Eigen::Matrix4d mat;
 	mat << 1./4,  k/(4*l), -k/(4*l), -1./(4*k),
-		 1./4,  k/(4*l),  k/(4*l),  1./(4*k),
-		 1./4, -k/(4*l),  k/(4*l), -1./(4*k),
-		 1./4, -k/(4*l), -k/(4*l),  1./(4*k);
+				 1./4,  k/(4*l),  k/(4*l),  1./(4*k),
+				 1./4, -k/(4*l),  k/(4*l), -1./(4*k),
+				 1./4, -k/(4*l), -k/(4*l),  1./(4*k);
 
 	//INVERSE
 	//mat <<    1.,  1.,  1.,  1.,
@@ -163,12 +163,12 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 	u[1] += remote_u2; // Equality!
 	u[2] += remote_u3; // Equality!
 
-	double ulim = 3; //0.7
-	double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);
 
-	
+	double ulim = 3; //0.7
+	double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);	
 	if (unorm > ulim)
 	{
+		ROS_INFO("Norm limit reached");
 		u[1] *= ulim / unorm;
 		u[2] *= ulim / unorm;
 	} 

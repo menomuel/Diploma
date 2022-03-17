@@ -5,10 +5,14 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <sensor_msgs/Imu.h>
 
-
+#include <vector>
+#include <queue>
+#include <deque>
 #include <sstream>
 
 #include <eigen3/Eigen/Dense>
+
+#include <iostream>
 
 geometry_msgs::Vector3Stamped glob_rpy_msg; 
 sensor_msgs::Imu glob_angleVel_msg;
@@ -84,6 +88,7 @@ void timerCallback(const ros::TimerEvent& event)
 
 int main(int argc, char **argv)
 {	
+	
 	ros::init(argc, argv, "controller");
 	ros::NodeHandle n("~");
 
@@ -97,7 +102,6 @@ int main(int argc, char **argv)
 	n.param<double>("ra", param_ra, 0.1);
 	n.param<double>("qa", param_qa, 0.001);
 	
-	ROS_INFO("Steps equal to %d\n", param_N);
 	ROS_INFO("velocity 'r' equal to %f\n", param_rw);
 	ROS_INFO("velocity 'q' equal to %f\n", param_qw);
 	ROS_INFO("angle 'r' equal to %f\n", param_ra);
@@ -108,10 +112,15 @@ int main(int argc, char **argv)
 	ros::Subscriber subAngleVel = n.subscribe("/imu/data_raw", 1, angleVelCallback); //with filter subscribe on /imu/data!
 
 	ros::Publisher chatter_pub = n.advertise<geometry_msgs::PointStamped>("/controls", 1);
+	ros::Publisher chatter_imu_prefilter = n.advertise<sensor_msgs::Imu>("/imu/data_prefiltered", 1);
+	
+	ros::Publisher chatter_imu_stepped = n.advertise<sensor_msgs::Imu>("/imu/data_stepped", 1);
+	ros::Publisher chatter_rpy_stepped = n.advertise<geometry_msgs::Vector3Stamped>("/imu/rpy/stepped", 1);
+	
 	ros::Publisher chatter_pub_mod = n.advertise<sensor_msgs::Imu>("/imu/data_mod", 1);
 	ros::Publisher chatter_rpy_pred = n.advertise<geometry_msgs::Vector3Stamped>("/imu/rpy/predicted", 1);
-	ros::Publisher chatter_imu_prefilter = n.advertise<sensor_msgs::Imu>("/imu/data_prefiltered", 1);
-	//ros::Publisher chatter_pub = n.advertise<geometry_msgs::Vector3Stamped>("controls", 1);
+	
+	
 	ros::Rate loop_rate(200);
 
 	//ros::Timer timer = n.createTimer(ros::Duration(0.005), timerCallback);
@@ -122,8 +131,11 @@ int main(int argc, char **argv)
 	double m = 0.7; // [kg]
 	double g = 9.8; // [m/c^2]
 
-	double I_xx = 0.0464; // [kg*m^2]
-	double I_yy = 0.0464; // [kg*m^2]
+	double I_xx = 0.01; // 0.0464; // [kg*m^2]
+	double I_yy = 0.01; // 0.0464; // [kg*m^2]
+
+	double k_x, a_x, k_y, a_y, k_z, a_z;
+	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
 	double k_teta, a_teta, k_phi, a_phi;
 	k_teta = a_teta = k_phi = a_phi = 16.0;
@@ -132,8 +144,10 @@ int main(int argc, char **argv)
 	double tetaVel = 0;
 	
 	double dt = 1./200;
-	double dt_fwd = 1. / 500; 
-	int N = param_N; // 9 (experim) + 25 (acc filter)
+	double dt_fwd = 1. / 200; 
+	//int N = param_N;
+	constexpr int N = 10;
+	ROS_INFO("Steps equal to %d\n", N);
 	
 	double init_val = 0;
 	double acc_filter_val_x = init_val;
@@ -147,10 +161,10 @@ int main(int argc, char **argv)
 	
 	Eigen::Matrix2d F;
 	F <<  1, 0, 
-			  dt*0, 1;
+			  dt, 1;
 	
-	Eigen::Vector2d Bx {dt / I_xx, 0};
-	Eigen::Vector2d By {dt / I_yy, 0};
+	Eigen::Vector2d Bx {dt / I_xx, 0}; //SHOULD BE PLUS
+	Eigen::Vector2d By {dt / I_yy, 0}; //SHOULD BE PLUS
 	
 	//const double q = param_q;
 	Eigen::Matrix2d Q;
@@ -180,6 +194,13 @@ int main(int argc, char **argv)
 	*/
 	double u2_kalman = 0;
 	double u3_kalman = 0;
+
+
+	std::deque<double> w_x_pred_q(N, 0);
+	std::deque<double> w_y_pred_q(N, 0);
+	
+	std::deque<double> u2_kalman_q(N, 0);
+	std::deque<double> u3_kalman_q(N, 0);
 
 	double w_x_measure, w_x_pred = init_val;
 	double phi_measure, phi_pred = init_val;
@@ -214,31 +235,64 @@ int main(int argc, char **argv)
 			
 			//phi_measure = glob_rpy_msg.vector.x; // offset angle
 			//phi_measure = std::atan2(glob_angleVel_msg.linear_acceleration.y, glob_angleVel_msg.linear_acceleration.z);
-			phi_measure = std::atan2(acc_filter_val_y, acc_filter_val_z);
+			double phi_offset = -0.071;
+			phi_measure = std::atan2(acc_filter_val_y, acc_filter_val_z) - phi_offset;
 			
 			//w_x_measure = glob_angleVel_msg.angular_velocity.x;
 			w_x_measure = gyro_filter_val_x;
 			
 			//teta_measure = glob_rpy_msg.vector.y;
 			//teta_measure = - std::atan2(glob_angleVel_msg.linear_acceleration.x, glob_angleVel_msg.linear_acceleration.z);
-			teta_measure = - std::atan2(acc_filter_val_x, acc_filter_val_z);
+			double teta_offset = -0.018;
+			teta_measure = - std::atan2(acc_filter_val_x, acc_filter_val_z) - teta_offset;
 			
 			//w_y_measure = glob_angleVel_msg.angular_velocity.y;	
 			w_y_measure = gyro_filter_val_y;
 			
 			//ROS_INFO("acc_x %f acc_y %f acc_z %f gyro_x %f gyro_y %f\n", acc_filter_val_x, acc_filter_val_y, acc_filter_val_z, gyro_filter_val_x, gyro_filter_val_y);
-
-			// N-steps prediction forward
 			
-			/*
+			
+
+			double phi_stepped = phi_measure;
+			double w_x_stepped = w_x_measure;
+			
+			double teta_stepped = teta_measure;
+			double w_y_stepped = w_y_measure;
+			
+			for (int i = 0; i < N; ++i)
+			{
+				w_x_stepped += (u2_kalman_q[i] / I_xx) * dt_fwd;
+				phi_stepped += w_x_pred_q[i] * dt_fwd;
+				//phi_stepped += w_x_stepped * dt_fwd;
+				w_y_stepped  += (u3_kalman_q[i] / I_yy) * dt_fwd;
+				teta_stepped += w_y_pred_q[i] * dt_fwd;
+				//teta_stepped += w_y_stepped * dt_fwd;
+			}
+			
+			
+			sensor_msgs::Imu msg_st;
+			msg_st.header.stamp = ros::Time::now();
+			msg_st.angular_velocity.x = w_x_stepped;
+			msg_st.angular_velocity.y = w_y_stepped;
+			
+			geometry_msgs::Vector3Stamped msg_rpy_stepped;
+			msg_rpy_stepped.header.stamp = ros::Time::now();
+			msg_rpy_stepped.vector.x = phi_stepped;
+			msg_rpy_stepped.vector.y = teta_stepped;
+			
+			// N-steps prediction forward
+			/* OLDEST VERSION
 			for (int i = 0; i < N; ++i)
 			{
 				phi_measure += w_x_measure * dt_fwd;
 				w_x_measure += (u2_kalman / I_xx) * dt_fwd;
+				//w_x_measure -= (u2_kalman / I_xx) * dt_fwd;
 				teta_measure += w_y_measure * dt_fwd;
 				w_y_measure += (u3_kalman / I_yy) * dt_fwd;
+				//w_y_measure -= (u3_kalman / I_yy) * dt_fwd;
 			}
 			*/
+			
 			
 			Eigen::Vector2d Xx_k_prev {w_x_pred, phi_pred};
 			Eigen::Vector2d Xx_k = F * Xx_k_prev + Bx * u2_kalman;
@@ -249,9 +303,9 @@ int main(int argc, char **argv)
 			Py = F * Py * F.transpose() + Q;
 			
 			
-			Eigen::Vector2d Zx_k {w_x_measure, phi_measure};
+			Eigen::Vector2d Zx_k {w_x_stepped, phi_stepped};
 			Eigen::Vector2d Yx_k = Zx_k - H * Xx_k;
-			Eigen::Vector2d Zy_k {w_y_measure, teta_measure};
+			Eigen::Vector2d Zy_k {w_y_stepped, teta_stepped};
 			Eigen::Vector2d Yy_k = Zy_k - H * Xy_k;
 			
 			Eigen::Matrix2d Sx_k = H * Px * H.transpose() + R;
@@ -264,20 +318,31 @@ int main(int argc, char **argv)
 			Xy_k += Ky_k * Yy_k;
 			Py = (Eigen::MatrixXd::Identity(2, 2) - Ky_k * H) * Py;
 			
-			//double k_y = P_y_plus / (P_y_plus + R);
-			//w_y += k_y * Y_y;
-			//P_y *= (1 - k_y);
-			
 			w_x_pred = Xx_k(0);
 			phi_pred = Xx_k(1);
 			w_y_pred = Xy_k(0);
 			teta_pred = Xy_k(1);
 			
 			
+			double x_cam = 0, y_cam = 0, z_cam = 0;
+			double dx_cam = 0, dy_cam = 0, dz_cam = 0;
 			
+			double H_xx = m * (-(a_x+k_x)*dx_cam - a_x*k_x*x_cam);
+			double H_yy = m * (-(a_y+k_y)*dy_cam - a_y*k_y*y_cam);
+			double H_zz = m * (-(a_z+k_z)*dz_cam - a_z*k_z*z_cam);
+			
+			//double teta_ref = std::atan2(H_xx / H_zz);
+			double teta_ref = 0;
+			//double phi_ref = std::atan2(-H_yy / sqrt(H_xx*H_xx + H_zz*H_zz));
+			double phi_ref = 0;
+			
+			//double u1 = sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz);
 			double u1 = m * g;
-			double u2 = I_xx * (-(a_phi+k_phi)*w_x_pred - a_phi*k_phi*phi_pred);
-			double u3 = I_yy * (-(a_teta+k_teta)*w_y_pred - a_teta*k_teta*teta_pred);
+			double u2 = I_xx * (-(a_phi+k_phi)*w_x_pred - a_phi*k_phi*(phi_pred-phi_ref));
+			double u3 = I_yy * (-(a_teta+k_teta)*w_y_pred - a_teta*k_teta*(teta_pred-teta_ref));
+			/// TEST CONTROLLER
+			//double u2 = I_xx * (-(a_phi+k_phi)*w_x_measure - a_phi*k_phi*phi_measure);
+			//double u3 = I_yy * (-(a_teta+k_teta)*w_y_measure - a_teta*k_teta*teta_measure);
 			
 			/// Debug
 			//u3 = glob_angleVel_msg.angular_velocity.y > 6. ? 6. : 0;
@@ -286,14 +351,40 @@ int main(int argc, char **argv)
 			
 			u2_kalman = u2;
 			u3_kalman = u3;
+			
+			u2_kalman_q.pop_front();
+			u3_kalman_q.pop_front();
+			u2_kalman_q.push_back(u2);
+			u3_kalman_q.push_back(u3);
+
+			w_x_pred_q.pop_front();
+			w_y_pred_q.pop_front();
+			w_x_pred_q.push_back(w_x_pred);
+			w_y_pred_q.push_back(w_y_pred);
+
+			//for (int i=0; i<N; ++i)
+			//	ROS_INFO("u2[%d]=%f ", i, u2_kalman_q[i]);
+			//ROS_INFO("u2_kalman %f\n", u2_kalman);
+			
+			//for (int i=0; i<N; ++i)
+			//	ROS_INFO("u3[%d]=%f ", i, u3_kalman_q[i]);
+			//ROS_INFO("u3_kalman %f\n", u3_kalman);
+			
+			//for (int i=0; i<N; ++i)
+			//	ROS_INFO("w_x[%d]=%f ", i, w_x_pred_q[i]);
+			//ROS_INFO("\n");
 
 			//ROS_INFO_STREAM("STEP " << count << "\n");
 			//ROS_INFO_STREAM("Px: " << Px << "\n");
 			//ROS_INFO_STREAM("Py: " << Py << "\n");
-			//ROS_INFO("w_x_pred = %f w_y_pred = %f\n u_kalman = (%f, %f)", w_x_pred,  w_y_pred, u2_kalman, u3_kalman);
-
-			//ROS_INFO("u={%.1f, %.1f, %.1f}", u1, u2, u3);
-			//ROS_INFO("currVel={%f, %f}, Vel={%f, %f}, u={%.1f, %.1f}", currPhiVel, currTetaVel, phiVel, tetaVel, u2, u3);
+			//ROS_INFO("u={%.1f, %.1f}\n", u2, u3);
+			//ROS_INFO("w_x_measure=%f, w_x_stepped=%f, w_x_pred=%f, u2=%f", w_x_measure, w_x_stepped, w_x_pred,  u2);
+			//ROS_INFO("w_y_measure=%f, w_y_stepped=%f, w_y_pred=%f, u3=%f", w_y_measure, w_y_stepped, w_y_pred,  u3);
+			
+			//ROS_INFO("phi_measure=%f, phi_stepped=%f, phi_pred=%f",  phi_measure, phi_stepped, phi_pred);
+			//ROS_INFO("teta_measure=%f, teta_stepped=%f, teta_pred=%f",  teta_measure, teta_stepped, teta_pred);
+		
+			//ROS_INFO("w_x_measure=%f, w_x_stepped=%f, w_x_pred=%f,  phi_measure=%f, phi_stepped=%f, phi_pred=%f, u2=%f",  w_x_measure, w_x_stepped, w_x_pred, phi_measure, phi_stepped, phi_pred, u2);
 		
 			geometry_msgs::PointStamped msg;
 			msg.header.stamp = ros::Time::now();
@@ -312,10 +403,15 @@ int main(int argc, char **argv)
 			msg_rpy_pred.vector.y = teta_pred;
 			msg_rpy_pred.vector.z = teta_measure;
 		
-			chatter_rpy_pred.publish(msg_rpy_pred);
+		
 			chatter_pub.publish(msg);
-			chatter_pub_mod.publish(msg_mod);
+			
 			chatter_imu_prefilter.publish(msg_pf);
+			chatter_imu_stepped.publish(msg_st);
+			chatter_rpy_stepped.publish(msg_rpy_stepped);
+			
+			chatter_pub_mod.publish(msg_mod);
+			chatter_rpy_pred.publish(msg_rpy_pred);
 			
 			++count;
 		}
