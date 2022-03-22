@@ -2,6 +2,7 @@
 //#include "std_msgs/String.h"
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <sensor_msgs/Imu.h>
 
@@ -16,8 +17,10 @@
 
 geometry_msgs::Vector3Stamped glob_rpy_msg; 
 sensor_msgs::Imu glob_angleVel_msg;
+geometry_msgs::PoseStamped glob_pose_msg; 
 
 bool wakeUp = false;
+bool cameraUp = false;
 
 void rpyCallback(const geometry_msgs::Vector3Stamped& msg)
 {
@@ -33,6 +36,20 @@ void angleVelCallback(const sensor_msgs::Imu& msg)
 	//ROS_INFO("Receive angular velocity {%.1f, %.1f, %.1f}", msg.angular_velocity.x,
 	//														msg.angular_velocity.y,
 	//														msg.angular_velocity.z);
+}
+
+void poseCallback(const geometry_msgs::PoseStamped& msg)
+{
+	glob_pose_msg = msg;
+	
+	double x = msg.pose.position.x;
+	double y = msg.pose.position.y;
+	double z = msg.pose.position.z;
+	
+	if (!cameraUp)
+		cameraUp = true;
+	
+	//ROS_INFO("Pose x=%.4f y=%.4f z=%.4f}", x, y, z);
 }
 /*
 void timerCallback(const ros::TimerEvent& event)
@@ -110,6 +127,7 @@ int main(int argc, char **argv)
 	
 	ros::Subscriber subRPY = n.subscribe("/imu/rpy/filtered", 1, rpyCallback);
 	ros::Subscriber subAngleVel = n.subscribe("/imu/data_raw", 1, angleVelCallback); //with filter subscribe on /imu/data!
+	ros::Subscriber subPose = n.subscribe("/mavros/vision_pose/pose", 1, poseCallback);
 
 	ros::Publisher chatter_pub = n.advertise<geometry_msgs::PointStamped>("/controls", 1);
 	ros::Publisher chatter_imu_prefilter = n.advertise<sensor_msgs::Imu>("/imu/data_prefiltered", 1);
@@ -128,7 +146,7 @@ int main(int argc, char **argv)
 
 
 	// From article
-	double m = 0.7; // [kg]
+	double m = 0.5; // [kg]
 	double g = 9.8; // [m/c^2]
 
 	double I_xx = 0.01; // 0.0464; // [kg*m^2]
@@ -207,6 +225,8 @@ int main(int argc, char **argv)
 	double w_y_measure, w_y_pred = init_val;
 	double teta_measure, teta_pred = init_val;
 	
+	double x_cam_prev = 0, y_cam_prev = 0, z_cam_prev = 0;
+	
 	int count = 0;
 	while (ros::ok())
 	{
@@ -278,21 +298,7 @@ int main(int argc, char **argv)
 			geometry_msgs::Vector3Stamped msg_rpy_stepped;
 			msg_rpy_stepped.header.stamp = ros::Time::now();
 			msg_rpy_stepped.vector.x = phi_stepped;
-			msg_rpy_stepped.vector.y = teta_stepped;
-			
-			// N-steps prediction forward
-			/* OLDEST VERSION
-			for (int i = 0; i < N; ++i)
-			{
-				phi_measure += w_x_measure * dt_fwd;
-				w_x_measure += (u2_kalman / I_xx) * dt_fwd;
-				//w_x_measure -= (u2_kalman / I_xx) * dt_fwd;
-				teta_measure += w_y_measure * dt_fwd;
-				w_y_measure += (u3_kalman / I_yy) * dt_fwd;
-				//w_y_measure -= (u3_kalman / I_yy) * dt_fwd;
-			}
-			*/
-			
+			msg_rpy_stepped.vector.y = teta_stepped;			
 			
 			Eigen::Vector2d Xx_k_prev {w_x_pred, phi_pred};
 			Eigen::Vector2d Xx_k = F * Xx_k_prev + Bx * u2_kalman;
@@ -324,20 +330,34 @@ int main(int argc, char **argv)
 			teta_pred = Xy_k(1);
 			
 			
+			double x_ref = 0, y_ref = 0, z_ref = 1;
 			double x_cam = 0, y_cam = 0, z_cam = 0;
-			double dx_cam = 0, dy_cam = 0, dz_cam = 0;
+			if (cameraUp)
+			{
+				x_cam = glob_pose_msg.pose.position.x;
+				y_cam = glob_pose_msg.pose.position.y;
+				z_cam = glob_pose_msg.pose.position.z;
+			}
+			double dx_cam = 0; //x_cam - x_cam_prev;
+			double dy_cam = 0; //y_cam - y_cam_prev;
+			double dz_cam = 0; //z_cam - z_cam_prev;
+			x_cam_prev = x_cam;
+			y_cam_prev = y_cam;
+			z_cam_prev = z_cam;
 			
-			double H_xx = m * (-(a_x+k_x)*dx_cam - a_x*k_x*x_cam);
-			double H_yy = m * (-(a_y+k_y)*dy_cam - a_y*k_y*y_cam);
-			double H_zz = m * (-(a_z+k_z)*dz_cam - a_z*k_z*z_cam);
+			double H_xx = m * (-(a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref));
+			double H_yy = m * (-(a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref));
+			double H_zz = m * (-(a_z+k_z)*dz_cam - a_z*k_z*(z_cam-z_ref)) + m * g;
 			
-			//double teta_ref = std::atan2(H_xx / H_zz);
-			double teta_ref = 0;
-			//double phi_ref = std::atan2(-H_yy / sqrt(H_xx*H_xx + H_zz*H_zz));
-			double phi_ref = 0;
+			double teta_ref = std::atan2(H_xx, H_zz);
+			//double teta_ref = 0;
+			double phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
+			//double phi_ref = 0;
 			
-			//double u1 = sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz);
-			double u1 = m * g;
+			double u1 = sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz);
+			if (u1 >= 8)
+				u1 = 8;
+			//double u1 = m * g;
 			double u2 = I_xx * (-(a_phi+k_phi)*w_x_pred - a_phi*k_phi*(phi_pred-phi_ref));
 			double u3 = I_yy * (-(a_teta+k_teta)*w_y_pred - a_teta*k_teta*(teta_pred-teta_ref));
 			/// TEST CONTROLLER
