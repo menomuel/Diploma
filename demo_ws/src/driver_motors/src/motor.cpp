@@ -137,27 +137,35 @@ void disarm()
 }
 
 
-void controlsCallback(const geometry_msgs::PointStamped& msg)
+void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 {
 	//controls_msg = msg;
 
 	double l = 0.12; // [m]
-	double k = 0.1; //0.15;
+	double k1 = 0.1; //0.15;
+	double k2 = 10;
 
 	Eigen::Matrix4d mat;
-	mat << 1./4,  k/(4*l), -k/(4*l), -1./(4*k),
-				 1./4,  k/(4*l),  k/(4*l),  1./(4*k),
-				 1./4, -k/(4*l),  k/(4*l), -1./(4*k),
-				 1./4, -k/(4*l), -k/(4*l),  1./(4*k);
+	mat << 1./4,  k1/(4*l), -k1/(4*l),   1./(4*k2),
+				 1./4,  k1/(4*l),  k1/(4*l),  -1./(4*k2),
+				 1./4, -k1/(4*l),  k1/(4*l),   1./(4*k2),
+				 1./4, -k1/(4*l), -k1/(4*l),  -1./(4*k2);
+	
+	//Eigen::Matrix4d mat;
+	//mat << 1./4,  1/(4*l), -1/(4*l),   1./(4*k),
+	//			 1./4,  1/(4*l),  1/(4*l),  -1./(4*k),
+	//			 1./4, -1/(4*l),  1/(4*l),   1./(4*k),
+	//			 1./4, -1/(4*l), -1/(4*l),  -1./(4*k);
+
 
 	//INVERSE
 	//mat <<    1.,  1.,  1.,  1.,
 	//		   l,   l,  -l,  -l,
 	//		   -l,  l,  l,   -l,
-	//		   -k,  k,   -k,  k;
+	//		   k,  -k,   k,  -k;
 
 
-	Eigen::Vector4d u(msg.point.x, msg.point.y, msg.point.z, 0.);
+	Eigen::Vector4d u(msg.quaternion.x, msg.quaternion.y, msg.quaternion.z, msg.quaternion.w);
 
 	u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
 	u[1] += remote_u2; // Equality!
@@ -172,6 +180,12 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 		u[1] *= ulim / unorm;
 		u[2] *= ulim / unorm;
 	} 
+	
+	double u4lim = 2;
+	if (u[3] > u4lim)
+		u[3] = u4lim;
+	else if (u[3] < -u4lim)
+		u[3] = -u4lim;
 	
 
 	// ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
@@ -189,6 +203,7 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 	double pwm1 = F(1)*coef+bias;
 	double pwm2 = F(2)*coef+bias;
 	double pwm3 = F(3)*coef+bias;
+	//ROS_INFO("pwm: %f %f %f %f", pwm0, pwm1, pwm2, pwm3);    
 
 
 	pwmSingle(pin1, pwm0, 0);

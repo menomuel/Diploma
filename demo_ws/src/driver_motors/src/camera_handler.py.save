@@ -147,7 +147,7 @@ def camera_handler():
 		u3_q.value = control[2]
 		u4_q.value = control[3]
 		 
-		rospy.loginfo("x=%f y=%f z=%f", x_estimated[0], x_estimated[1], x_estimated[2]);
+		#rospy.loginfo("x=%f y=%f z=%f", x_estimated[0], x_estimated[1], x_estimated[2]);
 		
 
 		# SECOND DEGREE

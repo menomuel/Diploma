@@ -4,6 +4,7 @@
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
+#include <geometry_msgs/QuaternionStamped.h>
 #include <sensor_msgs/Imu.h>
 
 #include <tf/transform_datatypes.h>
@@ -19,8 +20,15 @@ geometry_msgs::Vector3Stamped glob_rpy_msg;
 sensor_msgs::Imu glob_angleVel_msg;
 geometry_msgs::PoseStamped glob_pose_msg; 
 
+geometry_msgs::Vector3Stamped glob_cam_xyz_msg;
+geometry_msgs::Vector3Stamped glob_cam_vel_msg;
+geometry_msgs::Vector3Stamped glob_cam_rpy_msg;
+
 bool imuUp = false;
 bool cameraUp = false;
+bool camXYZUp = false;
+bool camVelUp = false;
+bool camRPYUp = false;
 
 geometry_msgs::Vector3 QuatToEuler(const geometry_msgs::Quaternion& msg)
 {
@@ -60,6 +68,7 @@ void angleVelCallback(const sensor_msgs::Imu& msg)
 	//														msg.angular_velocity.z);
 }
 
+
 void poseCallback(const geometry_msgs::PoseStamped& msg)
 {
 	glob_pose_msg = msg;
@@ -72,6 +81,31 @@ void poseCallback(const geometry_msgs::PoseStamped& msg)
 		cameraUp = true;
 	
 	//ROS_INFO("Pose x=%.4f y=%.4f z=%.4f}", x, y, z);
+}
+
+
+void camXYZKalCallback(const geometry_msgs::Vector3Stamped& msg)
+{
+	glob_cam_xyz_msg= msg;
+	
+	if (!camXYZUp)
+		camXYZUp = true;
+}
+
+void camVelKalCallback(const geometry_msgs::Vector3Stamped& msg)
+{
+	glob_cam_vel_msg= msg;
+	
+	if (!camVelUp)
+		camVelUp = true;
+}
+
+void camRPYKalCallback(const geometry_msgs::Vector3Stamped& msg)
+{
+	glob_cam_rpy_msg= msg;
+	
+	if (!camRPYUp)
+		camRPYUp = true;
 }
 /*
 void timerCallback(const ros::TimerEvent& event)
@@ -151,8 +185,13 @@ int main(int argc, char **argv)
 	ros::Subscriber subRPY = n.subscribe("/imu/rpy/filtered", 1, rpyCallback);
 	ros::Subscriber subAngleVel = n.subscribe("/imu/data_raw", 1, angleVelCallback); //with filter subscribe on /imu/data!
 	ros::Subscriber subPose = n.subscribe("/mavros/vision_pose/pose", 1, poseCallback);
+	ros::Subscriber subCamXYZ = n.subscribe("/camera/xyz/kalman", 1, camXYZKalCallback);
+	ros::Subscriber subCamVel = n.subscribe("/camera/vel/kalman", 1, camVelKalCallback);
+	ros::Subscriber subCamRPY = n.subscribe("/camera/rpy/kalman", 1, camRPYKalCallback);
+	
 
-	ros::Publisher chatter_pub = n.advertise<geometry_msgs::PointStamped>("/controls", 1);
+	//ros::Publisher chatter_pub_controls = n.advertise<geometry_msgs::PointStamped>("/controls", 1);
+	ros::Publisher chatter_pub_controls = n.advertise<geometry_msgs::QuaternionStamped>("/controls", 1);
 	ros::Publisher chatter_imu_prefilter = n.advertise<sensor_msgs::Imu>("/imu/data_prefiltered", 1);
 	
 	ros::Publisher chatter_imu_stepped = n.advertise<sensor_msgs::Imu>("/imu/data_stepped", 1);
@@ -198,13 +237,12 @@ int main(int argc, char **argv)
 	ROS_INFO("Steps N equal to %d", N);
 	ROS_INFO("Steps _N equal to %d", _N);
 	
-	double init_val = 0;
-	double acc_filter_val_x = init_val;
-	double acc_filter_val_y = init_val;
-	double acc_filter_val_z = init_val;
-	double gyro_filter_val_x = init_val;
-	double gyro_filter_val_y = init_val;
-	double gyro_filter_val_z = init_val;
+	double acc_filter_val_x = 0;
+	double acc_filter_val_y = 0;
+	double acc_filter_val_z = 0;
+	double gyro_filter_val_x = 0;
+	double gyro_filter_val_y = 0;
+	double gyro_filter_val_z = 0;
 	
 	double t_prev = ros::Time::now().toSec();
 	double T = 0.05; // [s], filter param
@@ -300,22 +338,20 @@ int main(int argc, char **argv)
 	std::deque<double> _u2_kalman_q(_N, 0);
 	std::deque<double> _u3_kalman_q(_N, 0);
 
-	double w_x_measure, w_x_pred = init_val;
-	double phi_measure, phi_pred = init_val;
-	double w_y_measure, w_y_pred = init_val;
-	double teta_measure, teta_pred = init_val;
-	double w_z_measure, w_z_pred = init_val;
-	double psi_measure, psi_pred = init_val;
+	double w_x_measure, w_x_pred = 0;
+	double phi_measure, phi_pred = 0;
+	double w_y_measure, w_y_pred = 0;
+	double teta_measure, teta_pred = 0;
+	double w_z_measure, w_z_pred = 0;
+	double psi_measure, psi_pred = 0;
 	
-	double _w_x_pred = init_val;
-	double _phi_pred = init_val;
-	double _w_y_pred = init_val;
-	double _teta_pred = init_val;
+	double _w_x_pred = 0;
+	double _phi_pred = 0;
+	double _w_y_pred = 0;
+	double _teta_pred = 0;
 	
 	
 	double _wm_x_pred = 0, _phi_m_pred = 0,  _wm_y_pred = 0, _teta_m_pred = 0;
-	
-	double x_cam_prev = 0, y_cam_prev = 0, z_cam_prev = 0;
 	
 	int count = 0;
 	
@@ -323,7 +359,7 @@ int main(int argc, char **argv)
 	{
 		ros::spinOnce();
 		
-		if (imuUp && cameraUp)
+		if (imuUp)
 		{
 			double dt_filter = glob_angleVel_msg.header.stamp.toSec() - t_prev;
 			t_prev = glob_angleVel_msg.header.stamp.toSec();
@@ -345,27 +381,32 @@ int main(int argc, char **argv)
 			msg_pf.angular_velocity.y = gyro_filter_val_y;
 			msg_pf.angular_velocity.z = gyro_filter_val_z;
 			
+
+			w_x_measure = gyro_filter_val_x;
+			w_y_measure = gyro_filter_val_y;
+			//ROS_INFO("acc_x %f acc_y %f acc_z %f gyro_x %f gyro_y %f\n", acc_filter_val_x, acc_filter_val_y, acc_filter_val_z, gyro_filter_val_x, gyro_filter_val_y);
+			w_z_measure = gyro_filter_val_z;
+			
 			
 			//phi_measure = glob_rpy_msg.vector.x; // offset angle
 			//phi_measure = std::atan2(glob_angleVel_msg.linear_acceleration.y, glob_angleVel_msg.linear_acceleration.z);
 			double phi_offset = 0; // -0.071;
 			phi_measure = std::atan2(acc_filter_val_y, acc_filter_val_z) - phi_offset;
-			
-			//w_x_measure = glob_angleVel_msg.angular_velocity.x;
-			w_x_measure = gyro_filter_val_x;
-			
 			//teta_measure = glob_rpy_msg.vector.y;
 			//teta_measure = - std::atan2(glob_angleVel_msg.linear_acceleration.x, glob_angleVel_msg.linear_acceleration.z);
 			double teta_offset = 0; // -0.018;
 			teta_measure = - std::atan2(acc_filter_val_x, acc_filter_val_z) - teta_offset;
 			
-			//w_y_measure = glob_angleVel_msg.angular_velocity.y;	
-			w_y_measure = gyro_filter_val_y;
-			
-			//ROS_INFO("acc_x %f acc_y %f acc_z %f gyro_x %f gyro_y %f\n", acc_filter_val_x, acc_filter_val_y, acc_filter_val_z, gyro_filter_val_x, gyro_filter_val_y);
-			w_z_measure = gyro_filter_val_z;
-			
-			geometry_msgs::Vector3 msg_cam_rpy = QuatToEuler(glob_pose_msg.pose.orientation);
+			//geometry_msgs::Vector3 msg_cam_rpy;
+			if (camRPYUp)
+			{
+				//msg_cam_rpy = QuatToEuler(glob_pose_msg.pose.orientation);
+				//psi_measure = msg_cam_rpy.z;
+				phi_measure = glob_cam_rpy_msg.vector.z;
+			} else
+			{
+				psi_measure = 0;
+			}
 			
 			double phi_stepped = phi_measure;
 			double w_x_stepped = w_x_measure;
@@ -385,7 +426,7 @@ int main(int argc, char **argv)
 				phi_stepped += w_x_pred_q[i] * dt_fwd;
 				w_y_stepped  += (u3_kalman_q[i] / I_yy) * dt_fwd;
 				teta_stepped += w_y_pred_q[i] * dt_fwd;
-				w_z_stepped  += (u4_kalman_q[i] / I_yy) * dt_fwd;
+				w_z_stepped  += (u4_kalman_q[i] / I_zz) * dt_fwd;
 				psi_stepped += w_z_pred_q[i] * dt_fwd;
 			}
 			// NEW
@@ -495,34 +536,42 @@ int main(int argc, char **argv)
 			
 			double x_ref = 0, y_ref = 0, z_ref = 1;
 			double x_cam = 0, y_cam = 0, z_cam = 0;
-			if (cameraUp)
+			if (camXYZUp)
 			{
-				x_cam = glob_pose_msg.pose.position.x;
-				y_cam = glob_pose_msg.pose.position.y;
-				z_cam = glob_pose_msg.pose.position.z;
+				x_cam = glob_cam_xyz_msg.vector.x;
+				y_cam = glob_cam_xyz_msg.vector.y;
+				z_cam = glob_cam_xyz_msg.vector.z;
 			}
-			double dx_cam = 0; //x_cam - x_cam_prev;
-			double dy_cam = 0; //y_cam - y_cam_prev;
-			double dz_cam = 0; //z_cam - z_cam_prev;
-			x_cam_prev = x_cam;
-			y_cam_prev = y_cam;
-			z_cam_prev = z_cam;
+			double dx_cam = 0, dy_cam = 0, dz_cam = 0; 
+			if (camVelUp)
+			{				
+				dx_cam = glob_cam_vel_msg.vector.x;
+				dy_cam = glob_cam_vel_msg.vector.y;
+				dz_cam = glob_cam_vel_msg.vector.z;
+			}
+			
+			ROS_INFO("x=%f y=%f z=%f}\n", x_cam, y_cam, z_cam);
+			ROS_INFO("dx=%f dy=%f dz=%f}\n", dx_cam, dy_cam, dz_cam);
 			
 			double H_xx = m * (-(a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref));
 			double H_yy = m * (-(a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref));
 			double H_zz = m * (-(a_z+k_z)*dz_cam - a_z*k_z*(z_cam-z_ref)) + m * g;
 			
-			double teta_ref = std::atan2(H_xx, H_zz);
-			//double teta_ref = 0;
-			double phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
-			//double phi_ref = 0;
 			
-			double u1 = sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz) * 0; // ZERO
+			double phi_ref = 0, teta_ref = 0;
+			if (camXYZUp && camVelUp)
+			{
+				teta_ref = std::atan2(H_xx, H_zz);
+				phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
+			}
+			
+			double u1 = 0 * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz); // ZERO
 			if (u1 >= 8)
 				u1 = 8;
 			//double u1 = m * g;
-			double u2 = I_xx * (-(a_phi+k_phi)*w_x_pred - a_phi*k_phi*(phi_pred-phi_ref)) * 0; // ZERO
-			double u3 = I_yy * (-(a_teta+k_teta)*w_y_pred - a_teta*k_teta*(teta_pred-teta_ref)) * 0; // ZERO
+			double u2 = I_xx * (-(a_phi+k_phi)*w_x_pred - a_phi*k_phi*(phi_pred-phi_ref)) * 0;
+			double u3 = I_yy * (-(a_teta+k_teta)*w_y_pred - a_teta*k_teta*(teta_pred-teta_ref)) * 0;
+			double u4 = I_zz * (-(a_psi+k_psi)*w_z_pred - a_psi*k_psi*psi_pred) * 0;
 			
 			
 			double _u1 = m * g;
@@ -595,15 +644,23 @@ int main(int argc, char **argv)
 		
 			//ROS_INFO("w_x_measure=%f, w_x_stepped=%f, w_x_pred=%f,  phi_measure=%f, phi_stepped=%f, phi_pred=%f, u2=%f",  w_x_measure, w_x_stepped, w_x_pred, phi_measure, phi_stepped, phi_pred, u2);
 		
-			geometry_msgs::PointStamped msg;
+			/*
+			geometry_msgs::PointStamped msg_u;
 			msg.header.stamp = ros::Time::now();
 			msg.point.x = u1; //u1
 			msg.point.y = u2; //u2
 			msg.point.z = u3; //u3
-				
+			*/
+			
+			geometry_msgs::QuaternionStamped msg_u;
+			msg_u.header.stamp = ros::Time::now();
+			msg_u.quaternion.x = u1;
+			msg_u.quaternion.y = u2;
+			msg_u.quaternion.z = u3;
+			msg_u.quaternion.w = u4;
 			
 			sensor_msgs::Imu msg_mod = glob_angleVel_msg;
-			msg_mod.header.stamp = ros::Time::now(); //wasn't present
+			msg_mod.header.stamp = ros::Time::now();
 			msg_mod.angular_velocity.x = w_x_pred;
 			msg_mod.angular_velocity.y = w_y_pred;
 			msg_mod.angular_velocity.z = w_z_pred;
@@ -626,7 +683,7 @@ int main(int argc, char **argv)
 			_msg_rpy_pred.vector.z = 0;
 		
 		
-			chatter_pub.publish(msg);
+			chatter_pub_controls.publish(msg_u);
 			
 			chatter_imu_prefilter.publish(msg_pf);
 			chatter_imu_stepped.publish(msg_st);
@@ -639,7 +696,7 @@ int main(int argc, char **argv)
 			chatter_rpy_pred.publish(msg_rpy_pred);
 			_chatter_rpy_pred.publish(_msg_rpy_pred);
 			
-			pub_cam_rpy.publish(msg_cam_rpy);
+			//pub_cam_rpy.publish(msg_cam_rpy);
 			
 			++count;
 			
