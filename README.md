@@ -1,1 +1,2 @@
 # Diploma
+Ты чё мой pool request игноришь?????
