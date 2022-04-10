@@ -8,11 +8,13 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 try:
     import core._dotblas
-    print ('FAST BLAS')
+    print 'FAST BLAS'
 except ImportError:
-    print ('slow blas')
+    print 'slow blas'
 
-print ("numpy version:", __version__)
+print "numpy version:", __version__
+print "maxint:", sys.maxint
+print
 
 from random import gauss
 from libstd import angle_to_pi
@@ -25,72 +27,49 @@ PRINT = 0
 class Kalman:
     def __init__(self, x0=0., y0=0.):        
 
-#indoor
-        '''
-        self.R = array([[0.0001,   0.,  0.,   0.,  0.,  0.,   0.,  0.,  0.],   # initialize 2-d array
-                        [0.,   0.0001,  0.,   0.,  0.,  0.,   0.,  0.,  0.],
-                        [0.,   0.,  0.0002,   0.,  0.,  0.,   0.,  0.,  0.],
-                        [0.,   0.,  0.,   0.0001,  0.,  0.,   0.,  0.,  0.],
-                        [0.,   0.,  0.,   0.,  0.0001,  0.,   0.,  0.,  0.],
-                        [0.,   0.,  0.,   0.,  0.,  0.0001,   0.,  0.,  0.],
-                        [0.,   0.,  0.,   0.,  0.,    0.,   0.01,  0.,  0.],
-                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.01,  0.],
-                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.,  0.01]], dtype = double)
-        '''
+        self.R = array([[0.01,   0.,  0.,   0.,  0.,  0.,   0.,  0.,  0.],   # initialize 2-d array
+                        [0.,   0.01,  0.,   0.,  0.,  0.,   0.,  0.,  0.],
+                        [0.,   0.,  0.1,   0.,  0.,  0.,   0.,  0.,  0.],
+                        [0.,   0.,  0.,   0.1,  0.,  0.,   0.,  0.,  0.],
+                        [0.,   0.,  0.,   0.,  0.1,  0.,   0.,  0.,  0.],
+                        [0.,   0.,  0.,   0.,  0.,  0.1,   0.,  0.,  0.],
+                        [0.,   0.,  0.,   0.,  0.,    0.,   0.1,  0.,  0.],
+                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.1,  0.],
+                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.,  0.1]], dtype = double)
 
-#        self.R = array([[0.01,   0.,  0.,   0.,  0.,  0.,   0.,  0.,  0.],   # initialize 2-d array
-#                        [0.,   0.01,  0.,   0.,  0.,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  0.01,   0.,  0.,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.01,  0.,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.01,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,  0.01,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,    0.,   0.1,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.1,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.,  0.1]], dtype = double)
+#        self.R = 0.05 * eye(9)
 
+	'''
+        self.Q = array([[0.01,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],   # initialize 2-d array
+                        [0.,   0.01,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
+                        [0.,   0.,  0.01, 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
+                        [0.,   0.,  0., 0.01,  0.,  0., 0.,  0., 0.,   0.,  0., 0.],
+                        [0.,   0.,  0., 0.,   0.01, 0., 0.,  0., 0.,   0.,  0., 0.],
+                        [0.,   0.,  0., 0.,   0.,  0.01,0.,  0., 0.,   0.,  0., 0.],
+                        [0.,   0.,  0., 0.,   0.,  0., 0.01,  0., 0.,   0.,  0., 0.],
+                        [0.,   0.,  0., 0.,   0.,  0., 0.,  0.01, 0.,   0.,  0., 0.],
+                        [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.01,   0.,  0., 0.],
+                        [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.01, 0., 0.],
+                        [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0.01,0.],
+                        [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.01]
+], dtype = double)
+	'''
 
-#outdoor
-#        self.R = array([[1.0,   0.,  0.,   0.,  0.,  0.,   0.,  0.,  0.],   # initialize 2-d array
-#                        [0.,   1.0,  0.,   0.,  0.,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  1.0,   0.,  0.,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.01,  0.,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.01,  0.,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,  0.01,   0.,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,    0.,   0.1,  0.,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.1,  0.],
-#                        [0.,   0.,  0.,   0.,  0.,    0.,   0.,  0.,  0.1]], dtype = double)
+        self.Q = 0.01 * eye(12)
 
-
-        self.R = 0.01 * eye(12)
-        self.R[0][0] = 1e-4
-        self.R[1][1] = 1e-4
-        self.R[2][2] = 2e-4        
-
-        self.R[3][3] = 1e-2
-        self.R[4][4] = 1e-2
-        self.R[5][5] = 2e-2
-
-        self.R[6][6] = 1e-4
-        self.R[7][7] = 1e-4
-        self.R[8][8] = 1e-4
-
-        self.R[9][9] = 1e-2
-        self.R[10][10] = 1e-2
-        self.R[11][11] = 1e-2
-
-	# Q matrix
-        self.Q = 0.00001 * eye(12) # 0.001
-
-	# Identity
         self.I = eye(12)
+
+
+
+
 
 
     def step(self, x_estimated, covariances, x_current, x_prediction, control, params, delta_time):
 
 
-        k1_psi, k1_phi, k1_theta, k2_psi, k2_phi, k2_theta, m = params
+        k1_psi, k1_phi, k1_theta, k2_psi, k2_phi, k2_theta = params
 
-# ШАГ 1 - PREDICTION
+# ШАГ 1 - ПРЕДСКАЗАНИЕ
 
 
         x_dot, y_dot, z_dot = x_estimated[3], x_estimated[4], x_estimated[5]
@@ -121,19 +100,18 @@ class Kalman:
 #], dtype = double)
 
 
-                  # x     y    z   x_d   y_d  z_d 
-        F = array([[1.,   0.,  0., delta_time,    0., 0.,  0., 0., 0., 0.,  0.,  0.],
-                   [0.,   1.,  0., 0.,   delta_time,  0., 0.,  0., 0., 0.,  0.,  0.],
-                   [0.,   0.,  1., 0.,   0.,  delta_time, 0.,  0., 0., 0.,  0.,  0.],
-                   [0.,   0.,  0., 1.,   0.,  0., u1/m*delta_time*(cos(psi)*sin(phi) - sin(psi)*cos(phi)*sin(theta)), u1/m*delta_time*(sin(psi)*cos(phi) - cos(psi)*sin(phi)*sin(theta)), u1/m*delta_time*(cos(psi)*cos(phi)*cos(theta)), 0., 0., 0.],   # initialize 2-d array
-                   [0.,   0.,  0., 0.,   1.,  0., u1/m*delta_time*(sin(psi)*sin(phi) + cos(psi)*cos(phi)*sin(theta)), u1/m*delta_time*(-cos(psi)*cos(phi) - sin(psi)*sin(phi)*sin(theta)), u1/m*delta_time*sin(psi)*cos(phi)*cos(theta),  0., 0., 0.],
-                   [0.,   0.,  0., 0.,   0.,  1., 0., u1/m*delta_time*(-sin(phi)*cos(theta)), u1/m*delta_time*(-cos(phi)*sin(theta)),  0., 0., 0.],
+        F = array([[1.,   0.,  0., delta_time,   0.,  0., 0.,   0.,  0., 0.,   0.,  0.],
+                   [0.,   1.,  0., 0.,   delta_time,  0., 0.,   0.,  0., 0.,   0.,  0.],
+                   [0.,   0.,  1., 0.,   0.,  delta_time, 0.,   0.,  0., 0.,   0.,  0.],
+                   [0.,   0.,  0., 1.,   0.,  0., u1*delta_time*(cos(psi)*sin(phi) - sin(psi)*cos(phi)*sin(theta)), u1*delta_time*(sin(psi)*cos(phi) - cos(psi)*sin(phi)*sin(theta)), u1*delta_time*(cos(psi)*cos(phi)*cos(theta)), 0., 0., 0.],   # initialize 2-d array
+                   [0.,   0.,  0., 0.,   1.,  0., u1*delta_time*(sin(psi)*sin(phi) + cos(psi)*cos(phi)*sin(theta)), u1*delta_time*(-cos(psi)*cos(phi) - sin(psi)*sin(phi)*sin(theta)), u1*delta_time*sin(psi)*cos(phi)*cos(theta),  0., 0., 0.],
+                   [0.,   0.,  0., 0.,   0.,  1., 0., u1*delta_time*(-sin(phi)*cos(theta)), u1*delta_time*(-cos(phi)*sin(theta)),  0., 0., 0.],
                    [0.,   0.,  0., 0.,   0.,  0., 1., 0., 0., delta_time, 0., 0.],
                    [0.,   0.,  0., 0.,   0.,  0., 0., 1., 0., 0., delta_time, 0.],
                    [0.,   0.,  0., 0.,   0.,  0., 0., 0., 1., 0., 0., delta_time],
-                   [0.,   0.,  0., 0.,   0.,  0., -k2_psi*delta_time*1., 0., 0., 1.-k1_psi*delta_time, 0., 0.],
-                   [0.,   0.,  0., 0.,   0.,  0., 0., -k2_phi*delta_time*1., 0., 0., 1.-k1_phi*delta_time, 0.],
-                   [0.,   0.,  0., 0.,   0.,  0., 0., 0., -k2_theta*delta_time*1., 0., 0., 1.-k1_theta*delta_time]
+                   [0.,   0.,  0., 0.,   0.,  0., -k2_psi*delta_time, 0., 0., 1.-k1_psi*delta_time, 0., 0.],
+                   [0.,   0.,  0., 0.,   0.,  0., 0., -k2_phi*delta_time, 0., 0., 1.-k1_phi*delta_time, 0.],
+                   [0.,   0.,  0., 0.,   0.,  0., 0., 0., -k2_theta*delta_time, 0., 0., 1.-k1_theta*delta_time]
 ], dtype = double)
 
 
@@ -166,32 +144,17 @@ class Kalman:
 
 #        print time_delay
 
-#        H = array([[1.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],   # initialize 2-d array
-#                   [0.,   1.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
-#                   [0.,   0.,  1., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
-#                   [0.,   0.,  0., 1.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
-#                   [0.,   0.,  0., 0.,   1.,  0., 0.,  0., 0.,   0.,  0., 0.],
-#                   [0.,   0.,  0., 0.,   0.,  1., 0.,  0., 0.,   0.,  0., 0.],
-#                   [0.,   0.,  0., 0.,   0.,  0., 1.,  0., 0.,   0.,  0., 0.],
-#                   [0.,   0.,  0., 0.,   0.,  0., 0.,  1., 0.,   0.,  0., 0.],
-#                   [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 1.,   0.,  0., 0.]
-#], dtype = double)
-
-        H = eye(12)
-
-#-------------  without xyz dots
-        '''
         H = array([[1.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],   # initialize 2-d array
                    [0.,   1.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
                    [0.,   0.,  1., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
+                   [0.,   0.,  0., 1.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
+                   [0.,   0.,  0., 0.,   1.,  0., 0.,  0., 0.,   0.,  0., 0.],
+                   [0.,   0.,  0., 0.,   0.,  1., 0.,  0., 0.,   0.,  0., 0.],
                    [0.,   0.,  0., 0.,   0.,  0., 1.,  0., 0.,   0.,  0., 0.],
                    [0.,   0.,  0., 0.,   0.,  0., 0.,  1., 0.,   0.,  0., 0.],
-                   [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 1.,   0.,  0., 0.],
-                   [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   1.,  0., 0.],
-                   [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  1., 0.],
-                   [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 1.]
-		], dtype = double)
-        '''
+                   [0.,   0.,  0., 0.,   0.,  0., 0.,  0., 1.,   0.,  0., 0.]
+], dtype = double)
+
 
 
 #--------- предсказание для матрицы ковариаций-------------------------
@@ -237,15 +200,15 @@ class Kalman:
         #print 'K:=', K
 #    print 'X:=', X
 
-        if PRINT: print ('x', x_estimated)
+        if PRINT: print 'x', x_estimated
 
         x_estimated = x_estimated.reshape(len(x_estimated),1)
 
 #        print 'z pred delta_z', features_d_a, features_prediction_d_a, features_d_a - features_prediction_d_a
 
-#        xx_delta = x_current - x_prediction
+        xx_delta = x_current - x_prediction
 #        print x_prediction, dot(H1,x_prediction)
-        xx_delta = x_current - dot(H,x_prediction)
+#        xx_delta = x_current - dot(H1,x_prediction)
 #        xx_delta[6] = angle_to_pi(xx_delta[6][0]) #vrode ne vliyaet no ostavim na vsyakii
 
 #usual
@@ -255,7 +218,7 @@ class Kalman:
         x_estimated = x_estimated + x_delta #коррекция вектора состояния с учетом измеренного выхода
 
 #        x_estimated = x_estimated
-        if PRINT: print ('x_new', x_estimated)
+        if PRINT: print 'x_new', x_estimated
 #        print 'x_new', x_estimated
 
         x_estimated = x_estimated.reshape(1,len(x_estimated))[0]

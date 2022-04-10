@@ -30,7 +30,7 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "console");
 
   ros::NodeHandle n;
-  ros::Publisher remote_pub = n.advertise<geometry_msgs::Point>("remote", 0);
+  ros::Publisher remote_pub = n.advertise<geometry_msgs::Point>("/remote", 0);
   
   ros::Rate loop_rate(100);
   
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 			break;
 			
 		case TORQ_OFF:
-			msg.x = -2;
+			msg.x = -step;
 			break;
 		
 		case ROLL_INC:

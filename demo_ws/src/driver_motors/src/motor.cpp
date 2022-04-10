@@ -30,11 +30,12 @@ static const int pwm_freq = 400;
 static const int pwm_range = 255;
 
 static const int MIN_WIDTH = 1150;
-static const int MAX_WIDTH = 1900;
+static const int MAX_WIDTH = 1830;
 
 static int FLOOR_WIDTH = 1150;
 static int CEIL_WIDTH = 1830;
 
+/*
 bool lockFlag = false;
 
 double remote_u1 = 0;
@@ -42,6 +43,7 @@ double remote_u2 = 0;
 double remote_u3 = 0;
 
 geometry_msgs::PointStamped controls_msg; 
+*/
 
 int pi = -1;
 
@@ -61,12 +63,13 @@ void pwm(int width, int sleep=0)
 			width = FLOOR_WIDTH;
 	}	
 	
-		
+	/*	
 	if (lockFlag)
 	{
 		width = 0;
 	    ROS_INFO_STREAM("Abort... Motors locked\n");
 	}
+	*/
 	
 	unsigned dutycycle = static_cast<unsigned>(width/1000000. * pwm_freq * pwm_range);
 	//ROS_INFO_STREAM("pwm: " << width << "\ndutycycle: " << dutycycle << "\nrange: " << pwm_range << "\nfreq: " << pwm_freq);
@@ -92,11 +95,13 @@ void pwmSingle(int pin, int width, int sleep=0)
 			width = FLOOR_WIDTH;
 	}
 	
+	/*
 	if (lockFlag)
 	{
 		width = 0;
 	    ROS_INFO_STREAM("Abort... Motors locked\n");
 	}
+	*/
 	
 	unsigned dutycycle = static_cast<unsigned>(width/1000000. * pwm_freq * pwm_range);
 	
@@ -142,7 +147,7 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	//controls_msg = msg;
 
 	double l = 0.12; // [m]
-	double k1 = 0.1; //0.15;
+	double k1 = 0.2; //0.15;
 	double k2 = 10;
 
 	Eigen::Matrix4d mat;
@@ -167,6 +172,7 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 
 	Eigen::Vector4d u(msg.quaternion.x, msg.quaternion.y, msg.quaternion.z, msg.quaternion.w);
 
+	/*
 	u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
 	u[1] += remote_u2; // Equality!
 	u[2] += remote_u3; // Equality!
@@ -190,7 +196,7 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 
 	// ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
 	//ROS_INFO_STREAM("Controls:\n" << u);    
-	  
+	*/
 	  
 	Eigen::Vector4d F = mat * u;
 	//ROS_INFO_STREAM("Forces:\n" << F);
@@ -203,8 +209,10 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	double pwm1 = F(1)*coef+bias;
 	double pwm2 = F(2)*coef+bias;
 	double pwm3 = F(3)*coef+bias;
-	//ROS_INFO("pwm: %f %f %f %f", pwm0, pwm1, pwm2, pwm3);    
+	ROS_INFO("pwm: %f %f %f %f", pwm0, pwm1, pwm2, pwm3);    
 
+	//if (u[0] == 0)
+	//	pwm0 = pwm1 = pwm2 = pwm3 = 0;
 
 	pwmSingle(pin1, pwm0, 0);
 	pwmSingle(pin2, pwm1, 0);
@@ -240,6 +248,7 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	*/
 }
 
+/*
 void remoteCallback(const geometry_msgs::Point& msg)
 {
 	remote_u1 = msg.x;
@@ -248,10 +257,11 @@ void remoteCallback(const geometry_msgs::Point& msg)
 	if (msg.x == -2)
 		lockFlag = true;
 }
-
+*/
 
 int main(int argc, char **argv)
 {
+	/*
 	fd1 = open("/dev/ttyUSB0", O_WRONLY);
 	if (fd1 == -1)
 	{
@@ -260,6 +270,7 @@ int main(int argc, char **argv)
 	{
 		fcntl(fd1, F_SETFL, 0);
 	}
+	*/
 	
 	pi = pigpio_start(0,0);
 	if (pi < 0)
@@ -320,10 +331,10 @@ int main(int argc, char **argv)
 	* is the number of messages that will be buffered up before beginning to throw
 	* away the oldest ones.
 	*/
-	ros::Subscriber subControls = n.subscribe("controls", 1, controlsCallback); 
-	ros::Subscriber subRemote = n.subscribe("remote", 1, remoteCallback);
+	ros::Subscriber subControls = n.subscribe("/controls", 1, controlsCallback); 
+	//ros::Subscriber subRemote = n.subscribe("remote", 1, remoteCallback);
 	
-	ros::Publisher pwm_pub = n.advertise<geometry_msgs::QuaternionStamped>("/pwm", 1);
+	//ros::Publisher pwm_pub = n.advertise<geometry_msgs::QuaternionStamped>("/pwm", 1);
 
 	/**
 	* ros::spin() will enter a loop, pumping callbacks.  With this version, all

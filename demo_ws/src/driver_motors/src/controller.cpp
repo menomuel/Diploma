@@ -30,25 +30,19 @@ bool camXYZUp = false;
 bool camVelUp = false;
 bool camRPYUp = false;
 
-geometry_msgs::Vector3 QuatToEuler(const geometry_msgs::Quaternion& msg)
+bool lockFlag = false;
+double remote_u1 = 0;
+double remote_u2 = 0;
+double remote_u3 = 0;
+
+void remoteCallback(const geometry_msgs::Point& msg)
 {
-    // the incoming geometry_msgs::Quaternion is transformed to a tf::Quaterion
-    tf::Quaternion quat;
-    tf::quaternionMsgToTF(msg, quat);
-
-    // the tf::Quaternion has a method to acess roll pitch and yaw
-    double roll, pitch, yaw;
-    tf::Matrix3x3(quat).getRPY(roll, pitch, yaw);
-
-    // the found angles are written in a geometry_msgs::Vector3
-    geometry_msgs::Vector3 rpy;
-    rpy.x = roll;
-    rpy.y = pitch;
-    rpy.z = yaw;
-    
-    //ROS_INFO("Current camera RPY %f %f %f", roll, pitch, yaw);
-
-    return rpy;
+	remote_u1 = msg.x;
+	remote_u2 = msg.y;
+	remote_u3 = msg.z;
+	
+	if (msg.x == -2)
+		lockFlag = true;
 }
 
 
@@ -181,6 +175,7 @@ int main(int argc, char **argv)
 	ROS_INFO("angle 'r' equal to %f", param_ra);
 	ROS_INFO("angle 'q' equal to %f", param_qa);
 	
+	ros::Subscriber subRemote = n.subscribe("/remote", 1, remoteCallback);
 	
 	ros::Subscriber subRPY = n.subscribe("/imu/rpy/filtered", 1, rpyCallback);
 	ros::Subscriber subAngleVel = n.subscribe("/imu/data_raw", 1, angleVelCallback); //with filter subscribe on /imu/data!
@@ -204,7 +199,7 @@ int main(int argc, char **argv)
 	ros::Publisher chatter_rpy_pred = n.advertise<geometry_msgs::Vector3Stamped>("/imu/rpy/predicted", 1);
 	ros::Publisher _chatter_rpy_pred = n.advertise<geometry_msgs::Vector3Stamped>("/imu/rpy/_predicted", 1);
 	
-	ros::Publisher pub_cam_rpy = n.advertise<geometry_msgs::Vector3>("/camera/rpy", 1);
+	ros::Publisher chatter_rpy_ref = n.advertise<geometry_msgs::Vector3Stamped>("/controller/rpy/ref", 1);
 	
 	ros::Rate loop_rate(200);
 
@@ -213,8 +208,8 @@ int main(int argc, char **argv)
 
 
 	// From article
-	double m = 0.5; // [kg]
-	double g = 9.8; // [m/c^2]
+	double m = 0.6; // [kg] // 0.4
+	double g = 9.81; // [m/c^2]
 
 	double I_xx = 0.01; // 0.0464; // [kg*m^2]
 	double I_yy = 0.01; // 0.0464; // [kg*m^2]
@@ -232,8 +227,6 @@ int main(int argc, char **argv)
 	double dt_fwd = 1. / 200; 
 	int N = param_N;
 	int _N = _param_N;
-	//constexpr int N = 10;
-	//constexpr int _N = 4;
 	ROS_INFO("Steps N equal to %d", N);
 	ROS_INFO("Steps _N equal to %d", _N);
 	
@@ -360,7 +353,7 @@ int main(int argc, char **argv)
 		ros::spinOnce();
 		
 		if (imuUp)
-		{
+		{			
 			double dt_filter = glob_angleVel_msg.header.stamp.toSec() - t_prev;
 			t_prev = glob_angleVel_msg.header.stamp.toSec();
 			
@@ -536,13 +529,27 @@ int main(int argc, char **argv)
 			
 			double x_ref = 0, y_ref = 0, z_ref = 1;
 			double x_cam = 0, y_cam = 0, z_cam = 0;
+			
+			
 			if (camXYZUp)
 			{
 				x_cam = glob_cam_xyz_msg.vector.x;
 				y_cam = glob_cam_xyz_msg.vector.y;
 				z_cam = glob_cam_xyz_msg.vector.z;
 			}
+			
+			
+			/*
+			if (cameraUp)
+			{
+				x_cam = glob_pose_msg.pose.position.x;
+				y_cam = glob_pose_msg.pose.position.y;
+				z_cam = glob_pose_msg.pose.position.z;
+			}
+			*/
+			
 			double dx_cam = 0, dy_cam = 0, dz_cam = 0; 
+			
 			if (camVelUp)
 			{				
 				dx_cam = glob_cam_vel_msg.vector.x;
@@ -550,29 +557,60 @@ int main(int argc, char **argv)
 				dz_cam = glob_cam_vel_msg.vector.z;
 			}
 			
-			ROS_INFO("x=%f y=%f z=%f}\n", x_cam, y_cam, z_cam);
-			ROS_INFO("dx=%f dy=%f dz=%f}\n", dx_cam, dy_cam, dz_cam);
 			
-			double H_xx = m * (-(a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref));
-			double H_yy = m * (-(a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref));
-			double H_zz = m * (-(a_z+k_z)*dz_cam - a_z*k_z*(z_cam-z_ref)) + m * g;
+			//ROS_INFO("x=%f y=%f z=%f}\n", x_cam, y_cam, z_cam);
+			//ROS_INFO("dx=%f dy=%f dz=%f}\n", dx_cam, dy_cam, dz_cam);
+			
+			double H_xx = - (a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref);
+			double H_yy = - (a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref);
+			double H_zz = - (a_z+k_z)*dz_cam - a_z*k_z*(z_cam-z_ref) + g;
 			
 			
 			double phi_ref = 0, teta_ref = 0;
+			/*
 			if (camXYZUp && camVelUp)
 			{
 				teta_ref = std::atan2(H_xx, H_zz);
 				phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
 			}
+			*/
 			
-			double u1 = 0 * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz); // ZERO
+			geometry_msgs::Vector3Stamped msg_rpy_ref;
+			msg_rpy_ref.header.stamp = ros::Time::now();
+			msg_rpy_ref.vector.x = phi_ref;
+			msg_rpy_ref.vector.y = teta_ref;
+			msg_rpy_ref.vector.z = 0;
+			
+			/// CONTROLS
+			double u1 = m * g ; // sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz);
+			double u2 = I_xx * (-(a_phi+k_phi)*w_x_pred - a_phi*k_phi*(phi_pred-phi_ref));
+			double u3 = I_yy * (-(a_teta+k_teta)*w_y_pred - a_teta*k_teta*(teta_pred-teta_ref));
+			double u4 = I_zz * (-(a_psi+k_psi)*w_z_pred - a_psi*k_psi*psi_pred) *0;
+			
+			/// LIMITS
 			if (u1 >= 8)
 				u1 = 8;
-			//double u1 = m * g;
-			double u2 = I_xx * (-(a_phi+k_phi)*w_x_pred - a_phi*k_phi*(phi_pred-phi_ref)) * 0;
-			double u3 = I_yy * (-(a_teta+k_teta)*w_y_pred - a_teta*k_teta*(teta_pred-teta_ref)) * 0;
-			double u4 = I_zz * (-(a_psi+k_psi)*w_z_pred - a_psi*k_psi*psi_pred) * 0;
 			
+			u1 = u1 < remote_u1 ? u1 : remote_u1;
+			u2 += remote_u2;
+			u3 += remote_u3;
+
+			double ulim = 3;
+			double unorm = sqrt(u2*u2+u3*u3);	
+			if (unorm > ulim)
+			{
+				ROS_INFO("Norm limit reached");
+				u2 *= ulim / unorm;
+				u3 *= ulim / unorm;
+			} 
+			
+			double u4lim = 2;
+			if (u4 > u4lim)
+				u4 = u4lim;
+			else if (u4 < -u4lim)
+				u4 = -u4lim;
+			
+			// ROS_INFO("Remote (%f, %f, %f):\n", remote_u1, remote_u2, remote_u3);
 			
 			double _u1 = m * g;
 			double _u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*_phi_pred);
@@ -696,7 +734,7 @@ int main(int argc, char **argv)
 			chatter_rpy_pred.publish(msg_rpy_pred);
 			_chatter_rpy_pred.publish(_msg_rpy_pred);
 			
-			//pub_cam_rpy.publish(msg_cam_rpy);
+			chatter_rpy_ref.publish(msg_rpy_ref);
 			
 			++count;
 			
