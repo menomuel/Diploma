@@ -129,7 +129,7 @@ include_directories(include ${catkin_INCLUDE_DIRS} ${CURSES_INCLUDE_DIR})
 add_executable(controller src/controller.cpp)
 add_executable(motor src/motor.cpp)
 add_executable(console src/console.cpp)
-
+add_executable(model_2013 src/model_2013.cpp)
 
 
 ## Rename C++ executable without prefix
@@ -140,6 +140,7 @@ add_executable(console src/console.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
+add_dependencies(model_2013 driver_motors_generate_messages_cpp)
 add_dependencies(controller driver_motors_generate_messages_cpp)
 add_dependencies(motor driver_motors_generate_messages_cpp)
 add_dependencies(console driver_motors_generate_messages_cpp)
@@ -149,6 +150,7 @@ add_dependencies(console driver_motors_generate_messages_cpp)
 
 if(pigpiod)
 	message(STATUS "PIGPIO found")
+	target_link_libraries(model_2013 ${catkin_LIBRARIES})
 	target_link_libraries(controller ${catkin_LIBRARIES})
 	target_link_libraries(motor ${catkin_LIBRARIES} ${pigpiod})
 	target_link_libraries(console ${catkin_LIBRARIES} ${CURSES_LIBRARIES})

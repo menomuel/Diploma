@@ -30,14 +30,14 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "console");
 
   ros::NodeHandle n;
-  ros::Publisher remote_pub = n.advertise<geometry_msgs::Point>("/remote", 1);
+  ros::Publisher remote_pub = n.advertise<geometry_msgs::Point>("/remote", 0);
   
   ros::Rate loop_rate(100);
   
   while (ros::ok())
   {
 	char c = getch();
-	double step = 0.25;
+	double step = 0.5;
 	double stepRoll = 0.2;
 	double stepPitch = 0.2;
 	switch (c)
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 			break;
 			
 		case TORQ_OFF:
-			msg.x = -2;
+			msg.x = -step;
 			break;
 		
 		case ROLL_INC:
@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 			break;	
 	}
 
-    //printw("Console controls: {%.1f, %.1f, %.1f}\n", msg.x, msg.y, msg.z);
+  //  printw("Console controls: {%.1f, %.1f, %.1f}\n", msg.x, msg.y, msg.z);
     
     remote_pub.publish(msg);
 
