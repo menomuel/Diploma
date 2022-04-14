@@ -89,7 +89,7 @@ class Model {
 		geometry_msgs::PointStamped glob_msg_control;
     
     public:
-		static constexpr double M = 0.7; // [kg]
+		static constexpr double M = 0.4; // [kg]
 		static constexpr double G = 9.81; // [m/s^2]
 	
 		static constexpr double I_xx = 0.02;
@@ -97,7 +97,7 @@ class Model {
 		static constexpr double I_zz = 0.02;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0, double _phi=0.1, double _teta=0, double _psi=0, double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0, double _phi=0.1, double _teta= -0.2, double _psi=0, double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{

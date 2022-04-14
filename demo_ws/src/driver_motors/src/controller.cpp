@@ -119,10 +119,10 @@ int main(int argc, char **argv)
 	n.param<double>("ra", param_ra, 0.1);
 	n.param<double>("qa", param_qa, 0.001);
 	
-	ROS_INFO("velocity 'r' equal to %f\n", param_rw);
-	ROS_INFO("velocity 'q' equal to %f\n", param_qw);
-	ROS_INFO("angle 'r' equal to %f\n", param_ra);
-	ROS_INFO("angle 'q' equal to %f\n", param_qa);
+	ROS_INFO("velocity 'r' equal to %f", param_rw);
+	ROS_INFO("velocity 'q' equal to %f", param_qw);
+	ROS_INFO("angle 'r' equal to %f", param_ra);
+	ROS_INFO("angle 'q' equal to %f", param_qa);
 	
 	
 	std::ofstream dr_file;
@@ -159,8 +159,8 @@ int main(int argc, char **argv)
 	ros::Rate loop_rate(200);
 
 	// From article
-	double m = 0.7; // [kg]
-	double g = 9.8; // [m/c^2]
+	double m = 0.4; // [kg]
+	double g = 9.81; // [m/c^2]
 
 	double I_xx = 0.02; //0.0464; // [kg*m^2] or 0.01
 	double I_yy = 0.02; //0.0464; // [kg*m^2] or 0.01
@@ -175,8 +175,8 @@ int main(int argc, char **argv)
 	double dt_fwd = 1. / 200; 
 	int N = param_N;
 	int _N = _param_N;
-	ROS_INFO("Steps equal to %d\n", N);
-	ROS_INFO("New steps equal to %d\n", _N);
+	ROS_INFO("Steps equal to %d", N);
+	ROS_INFO("New steps equal to %d", _N);
 	
 	double acc_filter_val_x = 0;
 	double acc_filter_val_y = 0;
@@ -188,6 +188,12 @@ int main(int argc, char **argv)
 	double T = 0.05; // [s], filter param
 	double k_f = 1. / T;
 	
+	double w_x_measure;
+	double phi_measure;
+	double w_y_measure;
+	double teta_measure;
+	double psi_measure;
+	/*
 	Eigen::Matrix2d F;
 	F <<  1, 0, 
 			  dt, 1;
@@ -224,20 +230,15 @@ int main(int argc, char **argv)
 	
 	std::deque<double> u2_kalman_q(N, 0);
 	std::deque<double> u3_kalman_q(N, 0);
-
-	double w_x_measure, w_x_pred = 0;
-	double phi_measure, phi_pred = 0;
-	double w_y_measure, w_y_pred = 0;
-	double teta_measure, teta_pred = 0;
+	*/
 	
 	///ALTERNATIVE
-	
 	Eigen::Matrix4d _F;
 	_F << 	       1,           0,        0,          0, 
 				k_f*dt, 1-k_f*dt,        0,          0,
 				      dt,           0,        1,          0,
 				       0,           0, k_f*dt, 1-k_f*dt;
-				       
+
 	Eigen::Vector4d _Bx {dt / I_xx, 0, 0, 0};
 	Eigen::Vector4d _By {dt / I_yy, 0, 0, 0};
 	
@@ -253,39 +254,34 @@ int main(int argc, char **argv)
 			  0, 0, param_ra, 0,
 			  0, 0, 0, param_ra/10;
 	
+	const double _p = 0.1; 
 	Eigen::Matrix4d _Px;
-	_Px << p, 0, 0, 0,
-			  0, p, 0, 0,
-			  0, 0, p, 0,
-			  0, 0, 0, p;
-			  
+	_Px << _p, 0, 0, 0,
+			  0, _p, 0, 0,
+			  0, 0, _p, 0,
+			  0, 0, 0, _p;
 	Eigen::Matrix4d _Py;
-	_Py << p, 0, 0, 0,
-			  0, p, 0, 0,
-			  0, 0, p, 0,
-			  0, 0, 0, p;
+	_Py << _p, 0, 0, 0,
+			  0, _p, 0, 0,
+			  0, 0, _p, 0,
+			  0, 0, 0, _p;
 			  
 	Eigen::Matrix4d _H = Eigen::MatrixXd::Identity(4, 4);
 	
+	int _delay_N = 4;
+	std::deque<double> _phi_delay_q(_delay_N, 0);
+	std::deque<double> _w_x_delay_q(_delay_N, 0);
+	std::deque<double> _teta_delay_q(_delay_N, 0);
+	std::deque<double> _w_y_delay_q(_delay_N, 0);
+
 	std::deque<double> _u2_kalman_q(_N, 0);
-	std::deque<double> _w_x_pred_q(_N, 0);
-	std::deque<double> _w_x_pf_pred_q(_N, 0);
-	std::deque<double> _phi_pred_q(_N, 0);
-	std::deque<double> _phi_pf_pred_q(_N, 0);
-	
 	double _u2_kalman = 0;
 	double _w_x_pred = 0;
 	double _w_x_pf_pred = 0;
 	double _phi_pred = 0;
 	double _phi_pf_pred = 0;
 	 
-	 
 	std::deque<double> _u3_kalman_q(_N, 0);
-	std::deque<double> _w_y_pred_q(_N, 0);
-	std::deque<double> _w_y_pf_pred_q(_N, 0);
-	std::deque<double> _teta_pred_q(_N, 0);
-	std::deque<double> _teta_pf_pred_q(_N, 0);
-	
 	double _u3_kalman = 0;
 	double _w_y_pred = 0;
 	double _w_y_pf_pred = 0;
@@ -293,129 +289,231 @@ int main(int argc, char **argv)
 	double _teta_pf_pred = 0;
 	
 	// PYTHON
-	double w_x = 0.1;
-	double phi = 0.2;
-	double _w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped;
-	double _u1, _u2;
+	double w_x = 0.;
+	double phi = 0.;
+	double w_y = 0.;
+	double teta = 0.;
+	double psi = 0.;
 	
+	double _w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped;
+	double _w_y_stepped, _w_y_pf_stepped, _teta_stepped, _teta_pf_stepped;
+	double _u1, _u2, _u3;
+
 	int count = 0;
 	while (ros::ok())
 	{
 		ros::spinOnce();
 		
-		//double dt_filter = ros::Time::now().toSec() - t_prev;
-		//t_prev = ros::Time::now().toSec();
-		
-		imuUp = true; //FOR MODEL PYTHON TEST
+		double dt_filter = ros::Time::now().toSec() - t_prev;
+		t_prev = ros::Time::now().toSec();
+
+		//double dt_filter = dt; // FOR PYTHON CODE TESTING
+
 		if (imuUp)
-		{						
-			// ROUGH
-			/*
-			double w_x = glob_angleVel_msg.angular_velocity.x;
-			double w_y = glob_angleVel_msg.angular_velocity.y;
-			double phi = glob_angleVel_msg.linear_acceleration.x;
-			double teta = glob_angleVel_msg.linear_acceleration.y;
-			*/
+		{
 			
-			phi += w_x * dt;
-			w_x += (_u2_kalman / I_xx) * dt;
+			bool modelOn = true;
 			
-			//w_x = glob_angleVel_msg.angular_velocity.x;
-			//phi = glob_angleVel_msg.linear_acceleration.x;
-			dr_file << ros::Time::now() << "," << w_x << "," << phi << "\n";
+			//ROS_INFO("ITERATION %d", count);
 			
-			// PREFILTER			
-			acc_filter_val_x = acc_filter_val_x - 1/T * (acc_filter_val_x -  phi) * dt; //dt_filter
-			gyro_filter_val_x = gyro_filter_val_x - 1/T * (gyro_filter_val_x -  w_x) * dt; //dt_filter
-			///ROS_INFO("acc_x=%f w_x=%f", glob_angleVel_msg.linear_acceleration.x, glob_angleVel_msg.angular_velocity.x);
-			///ROS_INFO("acc_x=%f acc_x_filter=%f", glob_angleVel_msg.linear_acceleration.x, acc_filter_val_x);
+			//phi += w_x * dt;
+			//w_x += (_u2_kalman / I_xx) * dt;
+			//dr_file << ros::Time::now() << "," << w_x << "," << phi << "\n";
+			//ROS_INFO("w_x=%.8f phi=%.8f", w_x, phi);
+			w_x = glob_angleVel_msg.angular_velocity.x;
+			w_y = glob_angleVel_msg.angular_velocity.y;
+			phi = glob_angleVel_msg.linear_acceleration.x;
+			teta = glob_angleVel_msg.linear_acceleration.y;
+			psi = glob_angleVel_msg.linear_acceleration.z;
+			dr_file << glob_angleVel_msg.header.stamp << "," << w_x << "," << w_y << "," << phi << "," << teta << "," << psi << "\n";
+
+			// DELAY	
+			phi_measure = _phi_delay_q.front();
+			w_x_measure = _w_x_delay_q.front();
+			_phi_delay_q.pop_front();
+			_w_x_delay_q.pop_front();
+			_phi_delay_q.push_back(phi);
+			_w_x_delay_q.push_back(w_x);
 			
-			dpf_file << ros::Time::now() << "," << gyro_filter_val_x << "," << acc_filter_val_x << "\n";
+			teta_measure = _teta_delay_q.front();
+			w_y_measure = _w_y_delay_q.front();
+			_teta_delay_q.pop_front();
+			_w_y_delay_q.pop_front();
+			_teta_delay_q.push_back(teta);
+			_w_y_delay_q.push_back(w_y);
+
+			// NO DELAY
+			//w_x_measure = w_x;
+			//w_y_measure = w_y;
+			//phi_measure = phi;
+			//teta_measure = teta;
+			//psi_measure = psi;
+
+			//ROS_INFO("w_x_measure %f", w_x_measure);
+			//for (int j = 0; j < _delay_N; ++j)
+			//	ROS_INFO("_w_delay_q[%d]=%f", j, _w_x_delay_q[j]);
+
+			// PREFILTER
+			acc_filter_val_x = acc_filter_val_x - 1/T * (acc_filter_val_x -  phi_measure) * dt_filter;
+			gyro_filter_val_x = gyro_filter_val_x - 1/T * (gyro_filter_val_x -  w_x_measure) * dt_filter;
 			
+			acc_filter_val_y = acc_filter_val_y - 1/T * (acc_filter_val_y -  teta_measure) * dt_filter;
+			gyro_filter_val_y = gyro_filter_val_y - 1/T * (gyro_filter_val_y -  w_y_measure) * dt_filter;
+			dpf_file << ros::Time::now() << "," << gyro_filter_val_x << "," << gyro_filter_val_y << "," << acc_filter_val_x << "," << acc_filter_val_y << "," << acc_filter_val_z << "\n";
+			
+			acc_filter_val_z = acc_filter_val_z - 1/T * (acc_filter_val_y -  teta_measure) * dt_filter;
+			//ROS_INFO("w_x_pf=%.8f phi_pf=%.8f", gyro_filter_val_x, acc_filter_val_x);
+
+			double w_x_pf = gyro_filter_val_x;
+			double w_y_pf = gyro_filter_val_y;
+
+			double phi_pf, teta_pf;
+			if (modelOn)
+			{
+				phi_pf = acc_filter_val_x;
+				teta_pf = acc_filter_val_y;
+			} else
+			{
+				if (psi > 20)
+					psi = 20;
+				else if (psi < 4)
+					psi = 4;	
+				
+				phi_measure = std::atan2(teta, psi);
+				teta_measure = - std::atan2(phi, psi);
+				phi_pf = std::atan2(acc_filter_val_y, acc_filter_val_z);
+				teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
+			}
 			// STEP
-			_w_x_stepped = w_x;
-			_w_x_pf_stepped = gyro_filter_val_x;
-			_phi_stepped = phi;
-			_phi_pf_stepped = acc_filter_val_x;
+			_w_x_stepped = w_x_measure;
+			_w_x_pf_stepped = w_x_pf;
+			_phi_stepped = phi_measure;
+			_phi_pf_stepped = phi_pf;
 			
+			_w_y_stepped = w_y_measure;
+			_w_y_pf_stepped = w_y_pf;
+			_teta_stepped = teta_measure;
+			_teta_pf_stepped = teta_pf;
 			
 			for (int i = 0; i < _N; ++i)
 			{
 				_phi_stepped += _w_x_stepped * dt_fwd;
 				_w_x_stepped += (_u2_kalman_q[i] / I_xx) * dt_fwd;
+				
+				_teta_stepped += _w_y_stepped * dt_fwd;
+				_w_y_stepped += (_u3_kalman_q[i] / I_yy) * dt_fwd;
 			}
 			
 			// KALMAN FILTER-4
 			/// x-axis
 			Eigen::Vector4d _Xx_k_prev {_w_x_pred, _w_x_pf_pred, _phi_pred, _phi_pf_pred};
 			Eigen::Vector4d _Xx_k = _F * _Xx_k_prev + _Bx * _u2_kalman;
-			
+			//ROS_INFO_STREAM("_Xx_k_prev\n" << _Xx_k_prev << " \n_Xx_k\n" << _Xx_k << "\n");
+
 			_Px = _F * _Px * _F.transpose() + _Q;
-			
+			//ROS_INFO_STREAM("_Px\n" << _Px  << "\n");
+
 			Eigen::Vector4d _Zx_k {_w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped};
 			Eigen::Vector4d _Yx_k = _Zx_k - _H * _Xx_k;
-			
+			//ROS_INFO_STREAM("_Zx_k\n" << _Zx_k << " \n_Yx_k\n" << _Yx_k << "\n");
+
 			Eigen::Matrix4d _Sx_k = _H * _Px * _H.transpose() + _R;
 			Eigen::Matrix4d _Kx_k = _Px * _H.transpose() * _Sx_k.inverse();
-			
+			//ROS_INFO_STREAM("_Sx_k\n" << _Sx_k << "\n_Kx_k\n" << _Kx_k << "\n");
+
 			_Xx_k += _Kx_k * _Yx_k;
 			_Px = (Eigen::MatrixXd::Identity(4, 4) - _Kx_k * _H) * _Px;
-			
+			//ROS_INFO_STREAM(" _Xx_k(new)\n" << _Xx_k << "\n");
+			//ROS_INFO_STREAM("_Px(new)\n" << _Px << "\n");
+
 			_w_x_pred = _Xx_k(0);
 			_w_x_pf_pred = _Xx_k(1);
 			_phi_pred = _Xx_k(2);
 			_phi_pf_pred = _Xx_k(3);
-			_dm_file << ros::Time::now() << "," << _w_x_pred << "," << _phi_pred << "\n";
+			//ROS_INFO("_w_x_pred=%.8f _phi_pred=%.8f", _w_x_pred, _phi_pred);
+
+			/// y-axis
+			Eigen::Vector4d _Xy_k_prev {_w_y_pred, _w_y_pf_pred, _teta_pred, _teta_pf_pred};
+			Eigen::Vector4d _Xy_k = _F * _Xy_k_prev + _By * _u3_kalman;
+
+			_Py = _F * _Py * _F.transpose() + _Q;
+
+			Eigen::Vector4d _Zy_k {_w_y_stepped, _w_y_pf_stepped, _teta_stepped, _teta_pf_stepped};
+			Eigen::Vector4d _Yy_k = _Zy_k - _H * _Xy_k;
+
+			Eigen::Matrix4d _Sy_k = _H * _Py * _H.transpose() + _R;
+			Eigen::Matrix4d _Ky_k = _Py * _H.transpose() * _Sy_k.inverse();
+
+			_Xy_k += _Ky_k * _Yy_k;
+			_Py = (Eigen::MatrixXd::Identity(4, 4) - _Ky_k * _H) * _Py;
+
+			_w_y_pred = _Xy_k(0);
+			_w_y_pf_pred = _Xy_k(1);
+			_teta_pred = _Xy_k(2);
+			_teta_pf_pred = _Xy_k(3);
+			_dm_file << ros::Time::now() << "," << _w_x_pred << "," << _w_y_pred << "," << _phi_pred << "," << _teta_pred << "\n";
 			
 			// CONTROLS
-			double phi_ref = 0;
+			double phi_ref = 0, teta_ref = 0;
 			_u1 = m * g;
 			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref));
-			_u2_kalman = _u2;
+			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_pred - a_teta*k_teta*(_teta_pred-teta_ref));
 			
-			_u_file << ros::Time::now() << "," << _u1 << "," << _u2 << "\n";
+			_u2_kalman = _u2;
+			_u3_kalman = _u3;
+			//ROS_INFO("_u2=%.8f", _u2);
+
+			_u_file << ros::Time::now() << "," << _u1 << "," << _u2 << "," << _u3 << "\n";
 			
 			if (_N != 0)
 			{
 				_u2_kalman_q.pop_front();
 				_u2_kalman_q.push_back(_u2);
+				
+				_u3_kalman_q.pop_front();
+				_u3_kalman_q.push_back(_u3);
 			}
 			
 			// MESSAGES
 			sensor_msgs::Imu msg_imu;
 			msg_imu.header.stamp = ros::Time::now();
-			msg_imu.angular_velocity.x = w_x;
-			msg_imu.linear_acceleration.x = phi;
+			msg_imu.angular_velocity.x = w_x_measure;
+			msg_imu.linear_acceleration.x = phi_measure;
+			msg_imu.angular_velocity.y = w_y_measure;
+			msg_imu.linear_acceleration.y = teta_measure;
 			
 			geometry_msgs::PointStamped msg;
 			msg.header.stamp = ros::Time::now();
 			msg.point.x = _u1;
 			msg.point.y = _u2;
+			msg.point.z = _u3;
 			
 			sensor_msgs::Imu msg_pf;
 			msg_pf.header.stamp = ros::Time::now();
 			msg_pf.linear_acceleration.x = acc_filter_val_x;
 			msg_pf.angular_velocity.x = gyro_filter_val_x;
+			msg_pf.linear_acceleration.y = acc_filter_val_y;
+			msg_pf.angular_velocity.y = gyro_filter_val_y;
 			
 			sensor_msgs::Imu _msg_st;
 			_msg_st.header.stamp = ros::Time::now();
 			_msg_st.angular_velocity.x = _w_x_stepped;
-			_msg_st.angular_velocity.y = 0;
+			_msg_st.angular_velocity.y = _w_y_stepped;
 			
 			geometry_msgs::Vector3Stamped _msg_rpy_stepped;
 			_msg_rpy_stepped.header.stamp = ros::Time::now();
 			_msg_rpy_stepped.vector.x = _phi_stepped;
-			_msg_rpy_stepped.vector.y = 0;
+			_msg_rpy_stepped.vector.y = _teta_stepped;
 			
 			sensor_msgs::Imu _msg_mod;
 			_msg_mod.header.stamp = ros::Time::now();
 			_msg_mod.angular_velocity.x = _w_x_pred;
-			_msg_mod.angular_velocity.y = 0;
+			_msg_mod.angular_velocity.y = _w_y_pred;
 			
 			geometry_msgs::Vector3Stamped _msg_rpy_pred;
 			_msg_rpy_pred.header.stamp = ros::Time::now();
 			_msg_rpy_pred.vector.x = _phi_pred;
-			_msg_rpy_pred.vector.y = 0;
+			_msg_rpy_pred.vector.y = _teta_pred;
 			_msg_rpy_pred.vector.z = 0;
 			
 			// PUBLISHERS
