@@ -33,7 +33,7 @@ static const int MIN_WIDTH = 1150;
 static const int MAX_WIDTH = 1900;
 
 static int FLOOR_WIDTH = 1150;
-static int CEIL_WIDTH = 1830;
+static int CEIL_WIDTH = 1900;
 
 bool lockFlag = false;
 
@@ -49,6 +49,180 @@ static int fd1;
 
 //static geometry_msgs::Quaternion pwm_msg;
 //ros::Publisher pwm_pub = n.advertise<geometry_msgs::Quaternion>("pwm", 0);
+
+/*
+class MotorHandler {
+	private:
+		ros::Subscriber subControls;
+		ros::Subscriber subRemote;
+		
+		ros::Publisher pubPWM;
+		
+		int pi;
+		geometry_msgs::PointStamped glob_msg_control;
+		geometry_msgs::PointStamped glob_msg_remote;
+
+	public:
+		static constexpr int PIN1 = 5;
+		static constexpr int PIN2 = 13;
+		static constexpr int PIN3 = 21;
+		static constexpr int PIN4 = 27;
+		
+		static constexpr int PWM_FREQ = 400;
+		static constexpr int PWM_RANGE = 255;
+		
+	public:
+		MotorHandler(int _pi) : pi(_pi) {
+			set_mode(pi, PIN1, PI_OUTPUT);
+			set_mode(pi, PIN2, PI_OUTPUT);
+			set_mode(pi, PIN3, PI_OUTPUT);
+			set_mode(pi, PIN4, PI_OUTPUT);
+
+			set_PWM_frequency(pi, PIN1, PWM_FREQ);
+			set_PWM_frequency(pi, PIN2, PWM_FREQ);
+			set_PWM_frequency(pi, PIN3, PWM_FREQ);
+			set_PWM_frequency(pi, PIN4, PWM_FREQ);
+		};
+		
+		void set_handler(ros::NodeHandle *nh) {
+			subControls = nh->subscribe("/controls", 1,	&MotorHandler::callback_controls, this);
+			subRemote = nh->subscribe("/remote", 1,	&MotorHandler::callback_remote, this);
+			pubPWM = nh->advertise<geometry_msgs::QuaternionStamped>("/motor/pwm", 1);
+		}
+
+		void pwm(int width, int sleep=0) {
+			if (width != 0)
+			{
+				if (width >= CEIL_WIDTH)
+					width = CEIL_WIDTH;
+				else if (width <= FLOOR_WIDTH)
+					width = FLOOR_WIDTH;
+			}	
+
+			if (lockFlag)
+			{
+				width = 0;
+				ROS_INFO_STREAM("Abort... Motors locked\n");
+			}
+
+			unsigned dutycycle = static_cast<unsigned>(width/1000000. * PWM_FREQ * PWM_RANGE);
+			set_PWM_dutycycle(pi, PIN1, dutycycle);
+			set_PWM_dutycycle(pi, PIN2, dutycycle);
+			set_PWM_dutycycle(pi, PIN3, dutycycle);
+			set_PWM_dutycycle(pi, PIN4, dutycycle);
+				
+			if (sleep)
+				std::this_thread::sleep_for(std::chrono::seconds(sleep));
+			return;
+		}
+		
+		void pwmSingle(int pin, int width, int sleep=0) {
+			if (width != 0)
+			{
+				if (width >= CEIL_WIDTH)
+					width = CEIL_WIDTH;
+				else if (width <= FLOOR_WIDTH)
+					width = FLOOR_WIDTH;
+			}
+			
+			if (lockFlag)
+			{
+				width = 0;
+				ROS_INFO_STREAM("Abort... Motors locked\n");
+			}
+			
+			unsigned dutycycle = static_cast<unsigned>(width/1000000. * PWM_FREQ * PWM_RANGE);
+			set_PWM_dutycycle(pi, pin, dutycycle);
+			
+			if (sleep)
+				std::this_thread::sleep_for(std::chrono::seconds(sleep));
+			return;
+		}
+		
+		void calibrate() {
+			ROS_INFO_STREAM("Calibrating...");
+			ROS_INFO_STREAM("Disconnect power and press Enter...");
+			std::cin.get();
+			pwm(MAX_WIDTH);
+			ROS_INFO_STREAM("Connect power and press Enter to calibrate...");
+			std::cin.get();
+			pwm(MAX_WIDTH, 4);
+			pwm(MIN_WIDTH, 8);
+			ROS_INFO_STREAM("Calibrate");
+			return;
+		}
+
+		void arm() {
+			ROS_INFO_STREAM("Arming...");
+			pwm(MIN_WIDTH, 4);
+			ROS_INFO_STREAM("Armed");
+		}
+		
+		void disarm() {
+			ROS_INFO_STREAM("Disarming...");
+			pwm(MIN_WIDTH);
+			ROS_INFO_STREAM("Disarmed");
+		}
+		
+		// CALLBACKS
+		
+		void callback_timer(const ros::TimerEvent& event) {
+			double l = 0.12 * (sqrt(2)/2); // [m] * cos(pi/4)
+			double k = 1.;
+
+			Eigen::Matrix4d mat;
+			mat << 1./4,  1/(4*l), -1/(4*l), -1./(4*k),
+						 1./4,  1/(4*l),  1/(4*l),  1./(4*k),
+						 1./4, -1/(4*l),  1/(4*l), -1./(4*k),
+						 1./4, -1/(4*l), -1/(4*l),  1./(4*k);
+			//INVERSE
+			//mat <<    1.,  1.,  1.,  1.,
+			//		   l,   l,  -l,  -l,
+			//		   -l,  l,  l,   -l,
+			//		   -k,  k,   -k,  k;
+
+			Eigen::Vector4d u(glob_msg_control.point.x, glob_msg_control.point.y, glob_msg_control.point.z, 0.);
+
+			u[0] = u[0] < glob_msg_remote.point.x ? u[0] : glob_msg_remote.point.x;
+			u[1] += glob_msg_remote.point.y;
+			u[2] += glob_msg_remote.point.z;
+			
+			double ulim = 0.07; //0.7
+			double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);	
+			if (unorm > ulim)
+			{
+				ROS_INFO("Norm limit reached");
+				u[1] *= ulim / unorm;
+				u[2] *= ulim / unorm;
+			} 
+			  
+			Eigen::Vector4d F = mat * u;
+
+			// pwm = coef * F + bias
+			double bias = 1194.1;
+			double coef = 157.5;
+
+			double pwm0 = F(0)*coef+bias;
+			double pwm1 = F(1)*coef+bias;
+			double pwm2 = F(2)*coef+bias;
+			double pwm3 = F(3)*coef+bias;
+
+			pwmSingle(PIN1, pwm0, 0);
+			pwmSingle(PIN2, pwm1, 0);
+			pwmSingle(PIN3, pwm2, 0);
+			pwmSingle(PIN4, pwm3, 0);	
+		}
+		
+		void callback_controls(const geometry_msgs::PointStamped& msg) {
+			glob_msg_control = msg;
+		}
+		
+		void callback_remote(const geometry_msgs::PointStamped& msg) {
+			glob_msg_remote = msg;
+		}
+		
+};
+*/
 
 void pwm(int width, int sleep=0)
 {
@@ -156,7 +330,6 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 	//		   -l,  l,  l,   -l,
 	//		   -k,  k,   -k,  k;
 
-
 	Eigen::Vector4d u(msg.point.x, msg.point.y, msg.point.z, 0.);
 
 
@@ -165,11 +338,11 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 	u[2] += remote_u3; // Equality!
 
 
-	double ulim = 0.1; //0.7
+	double ulim = 0.07; //0.7
 	double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);	
 	if (unorm > ulim)
 	{
-		ROS_INFO("Norm limit reached");
+		//ROS_INFO("Norm limit reached");
 		u[1] *= ulim / unorm;
 		u[2] *= ulim / unorm;
 	} 
@@ -191,6 +364,7 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 	double pwm2 = F(2)*coef+bias;
 	double pwm3 = F(3)*coef+bias;
 
+	ROS_INFO("PWM %f %f %f %f", pwm0, pwm1, pwm2, pwm3);
 
 	pwmSingle(pin1, pwm0, 0);
 	pwmSingle(pin2, pwm1, 0);
@@ -227,18 +401,19 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 }
 
 
-void mremoteCallback(const geometry_msgs::Point& msg)
+void mremoteCallback(const geometry_msgs::PointStamped& msg)
 {
-	remote_u1 = msg.x;
-	remote_u2 = msg.y;
-	remote_u3 = msg.z;
-	if (msg.x == -2)
+	remote_u1 = msg.point.x;
+	remote_u2 = msg.point.y;
+	remote_u3 = msg.point.z;
+	if (msg.point.x == -2)
 		lockFlag = true;
 }
 
 
 int main(int argc, char **argv)
 {
+	/*
 	fd1 = open("/dev/ttyUSB0", O_WRONLY);
 	if (fd1 == -1)
 	{
@@ -247,6 +422,7 @@ int main(int argc, char **argv)
 	{
 		fcntl(fd1, F_SETFL, 0);
 	}
+	*/
 	
 	pi = pigpio_start(0,0);
 	if (pi < 0)
@@ -268,10 +444,19 @@ int main(int argc, char **argv)
 	//calibrate();
 	//return 0;
   
+	/*
 	arm();
-	//pwm(1200, 10);
-	//pwm(0, 0);
-	//return 0;
+	set_PWM_dutycycle(pi, pin1, 0);
+	set_PWM_dutycycle(pi, pin2, 0);
+	set_PWM_dutycycle(pi, pin3, 0);
+	set_PWM_dutycycle(pi, pin4, 0);
+	return 0;
+	*/
+  
+	arm();
+	pwm(1200, 10);
+	pwm(0, 0);
+	return 0;
 
 	/**
 	* The ros::init() function needs to see argc and argv so that it can perform
@@ -307,10 +492,10 @@ int main(int argc, char **argv)
 	* is the number of messages that will be buffered up before beginning to throw
 	* away the oldest ones.
 	*/
-	ros::Subscriber subControls = n.subscribe("controls", 1, controlsCallback); 
-	ros::Subscriber subRemote = n.subscribe("remote", 1, mremoteCallback);
+	ros::Subscriber subControls = n.subscribe("/controls", 1, controlsCallback); 
+	ros::Subscriber subRemote = n.subscribe("/remote", 1, mremoteCallback);
 	
-	ros::Publisher pwm_pub = n.advertise<geometry_msgs::QuaternionStamped>("/pwm", 1);
+	//ros::Publisher pwm_pub = n.advertise<geometry_msgs::QuaternionStamped>("/pwm", 1);
 
 	/**
 	* ros::spin() will enter a loop, pumping callbacks.  With this version, all

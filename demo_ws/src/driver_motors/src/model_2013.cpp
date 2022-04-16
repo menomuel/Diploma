@@ -2,6 +2,9 @@
 
 #include <std_msgs/Int64.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Vector3Stamped.h>
+
 #include <sensor_msgs/Imu.h>
 
 #include <cmath>
@@ -11,8 +14,10 @@ class Model {
     
     private:
 		int counter;
-		ros::Publisher pub;
+		//ros::Publisher pub;
 		ros::Publisher pubImu;
+		ros::Publisher pubXYZ;
+		ros::Publisher pubVel;
 
 		ros::Subscriber subControls;
 		
@@ -110,8 +115,10 @@ class Model {
 			counter = 0; 
 			subControls = nh->subscribe("/controls", 1,	&Model::callback_controls, this);
 			
-			pub = nh->advertise<std_msgs::Int64>("/number_count", 1);   
+			//pub = nh->advertise<std_msgs::Int64>("/number_count", 1);   
 			pubImu = nh->advertise<sensor_msgs::Imu>("/imu/data_raw", 1);
+			pubXYZ = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/xyz", 1);
+			pubVel = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/vel", 1);
 		}
 		
 		void set_control(const double *_u) {
@@ -156,6 +163,7 @@ class Model {
 
 			//ROS_INFO("Controls (%f, %f, %f, %f)", u[0], u[1], u[2], u[3]);
 
+			// MESSAGES
 			sensor_msgs::Imu msg_imu;
 			msg_imu.header.stamp = ros::Time::now();
 			msg_imu.angular_velocity.x = dot_phi;
@@ -165,11 +173,24 @@ class Model {
 			msg_imu.linear_acceleration.y = teta;
 			msg_imu.linear_acceleration.z = psi;
 
-			std_msgs::Int64 msg_counter;
-			msg_counter.data = counter;
+			geometry_msgs::Vector3Stamped msg_xyz;
+			msg_xyz.header.stamp = ros::Time::now();
+			msg_xyz.vector.x = x;
+			msg_xyz.vector.y = y;
+			msg_xyz.vector.z = z;
 
-			pub.publish(msg_counter);
+			geometry_msgs::Vector3Stamped msg_vel;
+			msg_vel.header.stamp = ros::Time::now();
+			msg_vel.vector.x = dot_x;
+			msg_vel.vector.y = dot_y;
+			msg_vel.vector.z = dot_z;
+
+			//std_msgs::Int64 msg_counter;
+			//msg_counter.data = counter;
+			//pub.publish(msg_counter);
 			pubImu.publish(msg_imu);
+			pubXYZ.publish(msg_xyz);
+			pubVel.publish(msg_vel);
 		}
 		
 		void callback_controls(const geometry_msgs::PointStamped& msg) {

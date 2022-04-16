@@ -1,5 +1,5 @@
 #include "ros/ros.h"
-#include <geometry_msgs/Point.h>
+#include <geometry_msgs/PointStamped.h>
 
 //#include <iostream>
 #include <ncurses.h>
@@ -18,19 +18,19 @@ static constexpr char ROLL_DEC = 0x61; // 'a'
 static constexpr char PITCH_INC = 0x77; // 'w'
 static constexpr char PITCH_DEC = 0x73; // 's'
 
-static geometry_msgs::Point msg;
+static geometry_msgs::PointStamped msg;
 
 int main(int argc, char **argv)
 {
   initscr();
   halfdelay(1);  
 
-  msg.x = 0; msg.y = 0; msg.z = 0;
+  msg.point.x = 0; msg.point.y = 0; msg.point.z = 0;
 	
   ros::init(argc, argv, "console");
 
   ros::NodeHandle n;
-  ros::Publisher remote_pub = n.advertise<geometry_msgs::Point>("/remote", 1);
+  ros::Publisher remote_pub = n.advertise<geometry_msgs::PointStamped>("/remote", 1);
   
   ros::Rate loop_rate(100);
   
@@ -43,41 +43,42 @@ int main(int argc, char **argv)
 	switch (c)
 	{
 		case TORQ_INC:
-			msg.x += step;
+			msg.point.x += step;
 			break;
 
 		case TORQ_DEC:
-			msg.x -= step;
+			msg.point.x -= step;
 			break;
 			
 		case TORQ_OFF:
-			msg.x = -2;
+			msg.point.x = -2;
 			break;
 		
 		case ROLL_INC:
-			msg.y = stepRoll;
+			msg.point.y = stepRoll;
 			break;
 		
 		case ROLL_DEC:
-			msg.y = -stepRoll;
+			msg.point.y = -stepRoll;
 			break;
 
 		case PITCH_INC:
-			msg.z = stepPitch;
+			msg.point.z = stepPitch;
 			break;
 
 		case PITCH_DEC:
-			msg.z = -stepPitch;
+			msg.point.z = -stepPitch;
 			break;
 
 		default:
-			msg.y = 0;
-			msg.z = 0;
+			msg.point.y = 0;
+			msg.point.z = 0;
 			break;	
 	}
 
     //printw("Console controls: {%.1f, %.1f, %.1f}\n", msg.x, msg.y, msg.z);
     
+    msg.header.stamp = ros::Time::now();
     remote_pub.publish(msg);
 
     ros::spinOnce();
