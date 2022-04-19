@@ -239,7 +239,7 @@ void pwm(int width, int sleep=0)
 	if (lockFlag)
 	{
 		width = 0;
-	    ROS_INFO_STREAM("Abort... Motors locked\n");
+	    //ROS_INFO_STREAM("Abort... Motors locked\n");
 	}
 	
 	unsigned dutycycle = static_cast<unsigned>(width/1000000. * pwm_freq * pwm_range);
@@ -269,7 +269,7 @@ void pwmSingle(int pin, int width, int sleep=0)
 	if (lockFlag)
 	{
 		width = 0;
-	    ROS_INFO_STREAM("Abort... Motors locked\n");
+	   // ROS_INFO_STREAM("Abort... Motors locked\n");
 	}
 	
 	unsigned dutycycle = static_cast<unsigned>(width/1000000. * pwm_freq * pwm_range);
@@ -318,17 +318,27 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 	double l = 0.12 * (sqrt(2)/2); // [m] * cos(pi/4)
 	double k = 1.; //0.15;
 
+	// NORMAL AXES
+	
 	Eigen::Matrix4d mat;
-	mat << 1./4,  1/(4*l), -1/(4*l), -1./(4*k),
-				 1./4,  1/(4*l),  1/(4*l),  1./(4*k),
-				 1./4, -1/(4*l),  1/(4*l), -1./(4*k),
-				 1./4, -1/(4*l), -1/(4*l),  1./(4*k);
-
+	mat << 1./4,  1/(4*l), -1/(4*l), 1./(4*k),
+				 1./4,  1/(4*l),  1/(4*l),  -1./(4*k),
+				 1./4, -1/(4*l),  1/(4*l), 1./(4*k),
+				 1./4, -1/(4*l), -1/(4*l),  -1./(4*k);
 	//INVERSE
 	//mat <<    1.,  1.,  1.,  1.,
 	//		   l,   l,  -l,  -l,
 	//		   -l,  l,  l,   -l,
 	//		   -k,  k,   -k,  k;
+	
+	
+	// AXES ALONG DIAGONAL
+	/*
+	mat << 1./4,  1/(2*l),         0, 1./(4*k),
+				 1./4,         0,  1/(2*l),  -1./(4*k),
+				 1./4, -1/(2*l),         0, 1./(4*k),
+				 1./4,         0, -1/(2*l),  -1./(4*k);
+	*/
 
 	Eigen::Vector4d u(msg.point.x, msg.point.y, msg.point.z, 0.);
 
@@ -338,7 +348,7 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 	u[2] += remote_u3; // Equality!
 
 
-	double ulim = 0.07; //0.7
+	double ulim = 0.15; //0.7
 	double unorm = sqrt(u[1]*u[1]+u[2]*u[2]);	
 	if (unorm > ulim)
 	{
@@ -357,27 +367,32 @@ void controlsCallback(const geometry_msgs::PointStamped& msg)
 
 	// pwm = coef * F + bias
 	double bias = 1194.1;
+	double bias1 = 1200;
+	double bias2 = 1230;
+	double bias3 = 1235;
+	double bias4 = 1200;
+	
 	double coef = 157.5;
 
-	double pwm0 = F(0)*coef+bias;
-	double pwm1 = F(1)*coef+bias;
-	double pwm2 = F(2)*coef+bias;
-	double pwm3 = F(3)*coef+bias;
+	double pwm1 = F(0)*coef+bias1;
+	double pwm2 = F(1)*coef+bias2;
+	double pwm3 = F(2)*coef+bias3;
+	double pwm4 = F(3)*coef+bias4;
 
-	ROS_INFO("PWM %f %f %f %f", pwm0, pwm1, pwm2, pwm3);
+	//ROS_INFO("PWM %f %f %f %f", pwm0, pwm1, pwm2, pwm3);
 
-	pwmSingle(pin1, pwm0, 0);
-	pwmSingle(pin2, pwm1, 0);
-	pwmSingle(pin3, pwm2, 0);
-	pwmSingle(pin4, pwm3, 0);	
+	pwmSingle(pin1, pwm1, 0);
+	pwmSingle(pin2, pwm2, 0);
+	pwmSingle(pin3, pwm3, 0);
+	pwmSingle(pin4, pwm4, 0);	
 
 	
 	//geometry_msgs::QuaternionStamped pwm_msg;
 	//pwm_msg.header.stamp = ros::Time::now();
-	//pwm_msg.quaternion.x = pwm0;
-	//pwm_msg.quaternion.y = pwm1;
-	//pwm_msg.quaternion.z = pwm2;
-	//pwm_msg.quaternion.w = pwm3;
+	//pwm_msg.quaternion.x = pwm1;
+	//pwm_msg.quaternion.y = pwm2;
+	//pwm_msg.quaternion.z = pwm3;
+	//pwm_msg.quaternion.w = pwm4;
 	
 
 	/*
@@ -441,22 +456,7 @@ int main(int argc, char **argv)
 	set_PWM_frequency(pi, pin3, pwm_freq);
 	set_PWM_frequency(pi, pin4, pwm_freq);
 	
-	//calibrate();
-	//return 0;
-  
-	/*
 	arm();
-	set_PWM_dutycycle(pi, pin1, 0);
-	set_PWM_dutycycle(pi, pin2, 0);
-	set_PWM_dutycycle(pi, pin3, 0);
-	set_PWM_dutycycle(pi, pin4, 0);
-	return 0;
-	*/
-  
-	arm();
-	pwm(1200, 10);
-	pwm(0, 0);
-	return 0;
 
 	/**
 	* The ros::init() function needs to see argc and argv so that it can perform

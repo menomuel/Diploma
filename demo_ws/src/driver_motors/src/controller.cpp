@@ -191,10 +191,10 @@ int main(int argc, char **argv)
 	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
 	double k_teta, a_teta, k_phi, a_phi;
-	k_teta = a_teta = k_phi = a_phi = 16.0;
+	k_teta = a_teta = k_phi = a_phi = 5.0;
 	
 	double dt = 1./200;
-	double dt_fwd = 1. / 200; 
+	double dt_fwd = 1./200; 
 	int N = param_N;
 	int _N = _param_N;
 	ROS_INFO("Steps equal to %d", N);
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
 	double gyro_filter_val_y = 0;
 	
 	double t_prev = ros::Time::now().toSec();
-	double T = 0.05; // [s], filter param
+	double T = 0.02; // [s], filter param
 	double k_f = 1. / T;
 	
 	double w_x_measure;
@@ -234,9 +234,9 @@ int main(int argc, char **argv)
 	
 	Eigen::Matrix4d _R;
 	_R << param_rw, 0, 0, 0, 
-			  0, param_rw/10, 0, 0,
+			  0, param_rw, 0, 0,
 			  0, 0, param_ra, 0,
-			  0, 0, 0, param_ra/10;
+			  0, 0, 0, param_ra;
 	
 	const double _p = 0.1; 
 	Eigen::Matrix4d _Px;
@@ -257,6 +257,13 @@ int main(int argc, char **argv)
 	std::deque<double> _w_x_delay_q(_delay_N, 0);
 	std::deque<double> _teta_delay_q(_delay_N, 0);
 	std::deque<double> _w_y_delay_q(_delay_N, 0);
+
+	std::deque<double> x_delay_q(_delay_N, 0);
+	std::deque<double> y_delay_q(_delay_N, 0);
+	std::deque<double> z_delay_q(_delay_N, 0);
+	std::deque<double> dx_delay_q(_delay_N, 0);
+	std::deque<double> dy_delay_q(_delay_N, 0);
+	std::deque<double> dz_delay_q(_delay_N, 0);
 
 	std::deque<double> _u2_kalman_q(_N, 0);
 	double _u2_kalman = 0;
@@ -293,11 +300,11 @@ int main(int argc, char **argv)
 
 		//double dt_filter = dt; // FOR PYTHON CODE TESTING
 
-		if (imuUp)
+		bool modelOn = false;
+
+		
+		if (imuUp) //  && camXYZUp && camVelUp
 		{
-			
-			bool modelOn = true;
-			
 			//ROS_INFO("ITERATION %d", count);
 			
 			//phi += w_x * dt;
@@ -317,10 +324,23 @@ int main(int argc, char **argv)
 					psi = 4;
 			}
 			
+			// AXES ALONG DIAGONAL
+			/*
+			const double pi = std::acos(-1);
+			double w_x_rot = std::cos(pi/4) * w_x - std::sin(pi/4) * w_y;
+			double w_y_rot = std::sin(pi/4) * w_x + std::cos(pi/4) * w_y;
+			double phi_rot = std::cos(pi/4) * phi - std::sin(pi/4) * teta;
+			double teta_rot = std::sin(pi/4) * phi + std::cos(pi/4) * teta;
+			w_x = w_x_rot;
+			w_y = w_y_rot;
+			phi = phi_rot;
+			teta = teta_rot;
+			*/
+			
 			//dr_file << glob_angleVel_msg.header.stamp << "," << w_x << "," << w_y << "," << phi << "," << teta << "," << psi << "\n";
 
 			// DELAY	
-			
+			/*
 			phi_measure = _phi_delay_q.front();
 			w_x_measure = _w_x_delay_q.front();
 			_phi_delay_q.pop_front();
@@ -334,7 +354,7 @@ int main(int argc, char **argv)
 			_w_y_delay_q.pop_front();
 			_teta_delay_q.push_back(teta);
 			_w_y_delay_q.push_back(w_y);
-			
+			*/
 
 			// NO DELAY
 			
@@ -446,21 +466,47 @@ int main(int argc, char **argv)
 			_w_y_pf_pred = _Xy_k(1);
 			_teta_pred = _Xy_k(2);
 			_teta_pf_pred = _Xy_k(3);
-			_dm_file << ros::Time::now() << "," << _w_x_pred << "," << _w_y_pred << "," << _phi_pred << "," << _teta_pred << "\n";
+			_dm_file << ros::Time::now() << "," << _w_x_pred << "," << _w_y_pred << "," << _w_x_pf_pred  << "," << _w_y_pf_pred << "," << _phi_pred << "," << _teta_pred << "\n";
 			
 			// CAMERA
 			double x_cam = 0, y_cam = 0, z_cam = 0;
 			double dx_cam = 0, dy_cam = 0, dz_cam = 0;
 			double x_ref = 0, y_ref = 0, z_ref = 1;
+
+			double x_cam_measure = 0, y_cam_measure = 0, z_cam_measure = 0;
+			double dx_cam_measure = 0, dy_cam_measure = 0, dz_cam_measure = 0;
 			if (modelOn && camXYZUp && camVelUp)
 			{
-				x_cam = glob_camXYZ_msg.vector.x;
-				y_cam = glob_camXYZ_msg.vector.y;
-				z_cam = glob_camXYZ_msg.vector.z;
+				// NO DELAY
+				x_cam = x_cam_measure = glob_camXYZ_msg.vector.x;
+				y_cam = y_cam_measure = glob_camXYZ_msg.vector.y;
+				z_cam = z_cam_measure = glob_camXYZ_msg.vector.z;
+				dx_cam = dx_cam_measure = glob_camVel_msg.vector.x;
+				dy_cam = dy_cam_measure = glob_camVel_msg.vector.y;
+				dz_cam = dz_cam_measure = glob_camVel_msg.vector.z;
 
-				dx_cam = glob_camVel_msg.vector.x;
-				dy_cam = glob_camVel_msg.vector.y;
-				dz_cam = glob_camVel_msg.vector.z;
+				// DELAY
+				x_cam = x_delay_q.front();
+				dx_cam = dx_delay_q.front();
+				x_delay_q.pop_front();
+				dx_delay_q.pop_front();
+				x_delay_q.push_back(x_cam_measure);
+				dx_delay_q.push_back(dx_cam_measure);
+				
+				y_cam = y_delay_q.front();
+				dy_cam = dy_delay_q.front();
+				y_delay_q.pop_front();
+				dy_delay_q.pop_front();
+				y_delay_q.push_back(y_cam_measure);
+				dy_delay_q.push_back(dy_cam_measure);
+				
+				z_cam = z_delay_q.front();
+				dz_cam = dz_delay_q.front();
+				z_delay_q.pop_front();
+				dz_delay_q.pop_front();
+				z_delay_q.push_back(z_cam_measure);
+				dz_delay_q.push_back(dz_cam_measure);
+
 			}
 
 			double H_xx = - (a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref);
@@ -480,10 +526,10 @@ int main(int argc, char **argv)
 			// CONTROLS
 			phi_ref = teta_ref = 0; // no camera
 			_u1 = m * g; // no camera
-			//_u1 = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz);
-			// ESC_u2 = I_xx * (-(a_phi+k_phi)*0 - a_phi*k_phi*(0.5)); // I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref));
-			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref));
-			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_pred - a_teta*k_teta*(_teta_pred-teta_ref));
+			//_u1 = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz); // with camera
+			//_u2 = I_xx * (-(a_phi+k_phi)*0 - a_phi*k_phi*(0.5)); // ESC test
+			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)); // ZERO replaced _w_x_pred
+			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)); // ZERO
 			
 			_u2_kalman = _u2;
 			_u3_kalman = _u3;

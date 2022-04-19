@@ -4,11 +4,10 @@
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
-
 #include <sensor_msgs/Imu.h>
 
 #include <cmath>
-
+#include <signal.h>
 
 class Model {
     
@@ -76,7 +75,8 @@ class Model {
 		
 		double t_prev;
 		double u[4];
-		
+
+		bool controlsUp = false;
 		/*
 		double phi_prev, teta_prev, psi_prev;
 		double psi_ref, psi_ref_summ, psi_ref_prev;
@@ -102,7 +102,7 @@ class Model {
 		static constexpr double I_zz = 0.02;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0, double _phi=0.1, double _teta= -0.2, double _psi=0, double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0, double _phi=0, double _teta=0, double _psi=0, double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{
@@ -129,6 +129,8 @@ class Model {
 		}
 		
 		void step(double dt) {
+			if (controlsUp)
+			{
 			phi += dot_phi * dt;
 			teta += dot_teta * dt;
 			psi += dot_psi * dt;
@@ -143,11 +145,13 @@ class Model {
 			dot_y += ((- cos(psi) * sin(phi) + sin(psi) * cos(phi) * sin(teta)) * u[0] / mass) * dt;
 			y += dot_y * dt;
 			
+
 			double R = 0;
-			if (z < 0.22)
-				R = mass * G;
+			//if (z < 0.22)
+			//	R = mass * G;
 			dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
 			z += dot_z * dt;
+			}
 		}
 		
 		void callback_timer(const ros::TimerEvent& event) {
@@ -196,6 +200,7 @@ class Model {
 		void callback_controls(const geometry_msgs::PointStamped& msg) {
 			glob_msg_control = msg;
 			counter += 1;
+			controlsUp = true;
 		}
 };
 
