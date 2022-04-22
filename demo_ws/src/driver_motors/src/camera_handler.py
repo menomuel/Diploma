@@ -3,6 +3,7 @@ import rospy
 import time
 
 from numpy import *
+from tf.transformations import euler_from_quaternion
 
 from model_2013 import Model, Variable_With_Delay
 from kalman_quadro_no_xyz_dots import Kalman
@@ -78,7 +79,7 @@ def camera_handler():
 
 	control = [0.,0.,0.,0.]
 
-	delay1 = 1
+	delay1 = 12
 	u1_q = Variable_With_Delay(delay=delay1)
 	u2_q = Variable_With_Delay(delay=delay1)
 	u3_q = Variable_With_Delay(delay=delay1)
@@ -93,32 +94,34 @@ def camera_handler():
 	y_cam_dot2 = 0
 	z_cam_dot2 = 0
 	
-	time_prev = 0
+	time_prev = rospy.get_time()
 	time_nsteps = 0
 	dt = 0.01
 
 	while not rospy.is_shutdown():
-		if time_nsteps > 0:
-			dt = rospy.get_time() - time_prev
-			time_prev = rospy.get_time()
-			time_nsteps += 1
+		dt = rospy.get_time() - time_prev
+		time_prev = rospy.get_time()
+		time_nsteps += 1
 		
 		x_cam = glob_pose_msg.pose.position.x
 		y_cam = glob_pose_msg.pose.position.y
 		z_cam = glob_pose_msg.pose.position.z
 
-		phi = glob_rpy_msg.vector.x
-		theta = glob_rpy_msg.vector.y
-		psi = glob_rpy_msg.vector.z
+		quaternion = (glob_pose_msg.pose.orientation.x, glob_pose_msg.pose.orientation.y, glob_pose_msg.pose.orientation.z, glob_pose_msg.pose.orientation.w)
+		euler = euler_from_quaternion(quaternion)
+		phi = glob_rpy_msg.vector.x * 0# from controller
+		theta = glob_rpy_msg.vector.y * 0 # from controller
+		psi = glob_rpy_msg.vector.z * 0 # from camera
+		#rospy.loginfo("Psi=%f", euler[2])
 
-		phi_dot = glob_imu_msg.angular_velocity.x
-		theta_dot = glob_imu_msg.angular_velocity.y
-		psi_dot = glob_imu_msg.angular_velocity.z
+		phi_dot = glob_imu_msg.angular_velocity.x * 0 
+		theta_dot = glob_imu_msg.angular_velocity.y * 0 
+		psi_dot = glob_imu_msg.angular_velocity.z * 0 
 
 		control[0] = glob_control_msg.quaternion.x
-		control[1] = glob_control_msg.quaternion.y
-		control[2] = glob_control_msg.quaternion.z
-		control[3] = glob_control_msg.quaternion.w
+		control[1] = glob_control_msg.quaternion.y * 0
+		control[2] = glob_control_msg.quaternion.z * 0
+		control[3] = glob_control_msg.quaternion.w * 0.
 		
 		# SECOND DEGREE
 		d_dxy = 1.
@@ -139,26 +142,27 @@ def camera_handler():
 		#rospy.loginfo("u1=%f u2=%f u3=%f u4=%f", control[0], control[1], control[2], control[3])
 
 		
-		#x_current = array([x_cam, y_cam, z_cam, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
-		x_current = array([x_cam, y_cam, z_cam, x_cam_dot2, y_cam_dot2, z_cam_dot2, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
-		#model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
-		model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
-		#model_ref.dot.x, model_ref.dot.y, model_ref.dot.z = model.dot.x, model.dot.y, model.dot.z
+		x_current = array([x_cam, y_cam, z_cam, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
+		#x_current = array([x_cam, y_cam, z_cam, x_cam_dot2, y_cam_dot2, z_cam_dot2, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
+		model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
+		#model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
+		model_ref.dot.x, model_ref.dot.y, model_ref.dot.z = model.dot.x, model.dot.y, model.dot.z
 		
-		n = 1
+		n = 0
 		while n < delay1:# delay additional steps
 			model_ref.set_control([u1_q.get_index(delay1-n), u2_q.get_index(delay1-n), u3_q.get_index(delay1-n), u4_q.get_index(delay1-n)])
 			model_ref.step(0.01)
 			n += 1
-
-		#x_current_pred = array([model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = double)
-		x_current_pred = array([model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = double)
+		
+		x_current_pred = array([model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = double)
+		#x_current_pred = array([model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = double)
+		
 		
 		x_prediction = array([model.x, model.y, model.z, model.dot.x, model.dot.y, model.dot.z, model.psi, model.phi, model.theta, model.dot.psi, model.dot.phi, model.dot.theta], dtype = double)
 
 		x_estimated[:] = x_prediction[:]
-		#x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(9,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
-		x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(12,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
+		x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(9,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
+		#x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(12,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
 		
 		u1_q.value = control[0]
 		u2_q.value = control[1]

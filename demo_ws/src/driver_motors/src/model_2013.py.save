@@ -8,14 +8,14 @@ from math import sin, cos, pi, sqrt
 from numpy import *
 
 
-M = 0.45     # kg
+M = 0.4     # kg
 #m_real = 0.5
 
 G = 9.81     # m/c^2
 MG = M * G
-Ixx = 0.02
-Iyy = 0.02
-Izz = 0.02
+#Ixx = 1.
+#Iyy = 1.
+#Izz = 1.
 
 delay1 = 0
 delay = 0
@@ -213,29 +213,19 @@ class Model:
         self.u = u
 
     def step(self, dt):
-        self.psi += self.dot.psi * dt
-        self.phi += self.dot.phi * dt
-        self.theta += self.dot.theta * dt
 
-        self.dot.phi += (self.u[1] - (Izz - Iyy) * self.dot.theta * self.dot.psi) / Ixx * dt
-        self.dot.theta += (self.u[2] - (Ixx - Izz) * self.dot.phi * self.dot.psi) / Iyy * dt
-        self.dot.psi += self.u[3] / Izz * dt
-        
-        # move
-        self.dot.x += ((sin(self.psi) * sin(self.phi) + cos(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
-        self.x += (self.dot.x) * dt
+#        print self.u
+        # rotate
+        self.dot.phi += (self.u[1] - (Izz - Iyy) *\
+#                 self.dot.theta * self.dot.psi) / Ixx * dt
+#        self.dot.theta += (self.u[2] - (Ixx - Izz) *\
+#                self.dot.phi * self.dot.psi) / Iyy * dt
+#        self.dot.psi += self.u[3] / Izz * dt
 
-        self.dot.y += ((-cos(self.psi) * sin(self.phi) + sin(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
-        self.y += (self.dot.y) * dt
+#        self.psi += self.dot.phi * dt
+#        self.phi += self.dot.phi * dt
+#        self.theta += self.dot.theta * dt
 
-        R = 0.
-        if (self.z<0.22):
-            R = self.mass * G
-
-        self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - self.mass * G + R) / self.mass * dt
-        self.z += self.dot.z * dt # self.dot.z = 0.
-        
-        '''	
         # simple model for angles
 #        self.phi = self.u[1]
 #        self.theta = self.u[2]
@@ -274,5 +264,25 @@ class Model:
         self.psi += self.dot.psi * dt
         self.phi += self.dot.phi * dt
         self.theta += self.dot.theta * dt
-		'''
+
+
+        # move
+        self.dot.x += (((sin(self.psi) * sin(self.phi) +\
+                cos(self.psi) * cos(self.phi) * sin(self.theta)) *\
+                self.u[0]  - self.mu_x * self.dot.x * abs(self.dot.x) - self.F0x) / self.mass) * dt
+        self.x += (self.dot.x) * dt
+
+        self.dot.y += (((-cos(self.psi) * sin(self.phi) +\
+                sin(self.psi) * cos(self.phi) * sin(self.theta)) *\
+                self.u[0]  - self.mu_y * self.dot.y * abs(self.dot.y) - self.F0y) / self.mass) * dt
+        self.y += (self.dot.y) * dt
+
+        R = 0.
+        if (self.z<0.22):
+            R = self.mass * G
+
+        self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - self.mass * G + R) / self.mass * dt
+#        self.dot.z = 0.
+        self.z += self.dot.z * dt
+
 

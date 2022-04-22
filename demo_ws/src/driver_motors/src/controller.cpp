@@ -1,8 +1,9 @@
-#include "ros/ros.h"
-//#include "std_msgs/String.h"
+#include <ros/ros.h>
+
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
+#include <geometry_msgs/QuaternionStamped.h>
 #include <sensor_msgs/Imu.h>
 
 #include <vector>
@@ -21,14 +22,14 @@ sensor_msgs::Imu glob_angleVel_msg;
 
 geometry_msgs::Vector3Stamped glob_camXYZ_msg;
 geometry_msgs::Vector3Stamped glob_camVel_msg;
+geometry_msgs::Vector3Stamped glob_camRPY_msg;
 
-//double remote_u1 = 0;
-//double remote_u2 = 0;
-//double remote_u3 = 0;
+geometry_msgs::PointStamped glob_remote_msg;
 
 bool imuUp = false;
 bool camXYZUp = false; // separate for XYZ and Vel??
 bool camVelUp = false; // separate for XYZ and Vel??
+bool camRPYUp = false;
 
 void rpyCallback(const geometry_msgs::Vector3Stamped& msg)
 {
@@ -45,66 +46,13 @@ void angleVelCallback(const sensor_msgs::Imu& msg)
 	//														msg.angular_velocity.y,
 	//														msg.angular_velocity.z);
 }
-/*
-void timerCallback(const ros::TimerEvent& event)
+
+void remoteCallback(const geometry_msgs::PointStamped& msg)
 {
-	// From article
-	double m = 0.7; // [kg]
-	double g = 9.8; // [m/c^2]
-
-	double I_xx = 0.0464; // [kg*m^2]
-	double I_yy = 0.0464; // [kg*m^2]
-
-	double k_teta, a_teta, k_phi, a_phi;
-	k_teta = a_teta = k_phi = a_phi = 16.0;
-
-	double phiVel = 0;
-	double tetaVel = 0;	
-	double k = 50;
-	double dt = 0.01;
-	
-	double phi = glob_rpy_msg.vector.x;
-	double teta = glob_rpy_msg.vector.y;
-	
-	//phi = 0;
-	//teta = 0;
-	
-	double currPhiVel = glob_angleVel_msg.angular_velocity.x;
-	double currTetaVel = glob_angleVel_msg.angular_velocity.y;
-	
-	//phiVel -= k * (phiVel - currPhiVel) * dt;
-	//tetaVel -= k * (tetaVel - currTetaVel) * dt;
-	
-	phiVel = currPhiVel / 1;
-	tetaVel = currTetaVel / 1;
-	
-	double u1 = m * g;
-	double u2 = I_xx * (-(a_phi+k_phi)*phiVel - a_phi*k_phi*phi);
-	double u3 = I_yy * (-(a_teta+k_teta)*tetaVel - a_teta*k_teta*teta);
-	
-	//ROS_INFO("u={%.1f, %.1f, %.1f}", u1, u2, u3);
-	//ROS_INFO("currVel={%f, %f}, Vel={%f, %f}, u={%.1f, %.1f}", currPhiVel, currTetaVel, phiVel, tetaVel, u2, u3);
-	
-	//geometry_msgs::Point msg;
-    geometry_msgs::PointStamped msg;
-    
-    msg.header.stamp = ros::Time::now();
-    msg.point.x = u1;
-    msg.point.y = u2;
-    msg.point.z = u3;
-    
-    chatter_pub.publish(msg);
+	glob_remote_msg = msg;
+	//ROS_INFO("Remote caught");
 }
-*/
 
-/*
-void remoteCallback(const geometry_msgs::Point& msg)
-{
-	remote_u1 = msg.x;
-	remote_u2 = msg.y;
-	remote_u3 = msg.z;
-}
-*/
 
 void camXYZCallback(const geometry_msgs::Vector3Stamped& msg)
 {
@@ -118,6 +66,13 @@ void camVelCallback(const geometry_msgs::Vector3Stamped& msg)
 	glob_camVel_msg = msg;
 	if (!camVelUp)
 		camVelUp = true;
+}
+
+void camRPYCallback(const geometry_msgs::Vector3Stamped& msg)
+{
+	glob_camRPY_msg = msg;
+	if (!camRPYUp)
+		camRPYUp = true;
 }
 
 int main(int argc, char **argv)
@@ -158,14 +113,14 @@ int main(int argc, char **argv)
 	
 	ros::Subscriber subRPY = n.subscribe("/imu/rpy/filtered", 1, rpyCallback);
 	ros::Subscriber subAngleVel = n.subscribe("/imu/data_raw", 1, angleVelCallback); //with filter subscribe on /imu/data!
-	//ros::Subscriber subRemote = n.subscribe("/remote", 1, remoteCallback);
-	ros::Subscriber subCamXYZ = n.subscribe("/camera/xyz", 1, camXYZCallback);
-	ros::Subscriber subCamVel = n.subscribe("/camera/vel", 1, camVelCallback);
+	ros::Subscriber subRemote = n.subscribe("/remote", 1, remoteCallback);
+	ros::Subscriber subCamXYZ = n.subscribe("/camera/xyz/kalman", 1, camXYZCallback);
+	ros::Subscriber subCamVel = n.subscribe("/camera/vel/kalman", 1, camVelCallback);
+	//ros::Subscriber subCamXYZ = n.subscribe("/camera/xyz/2degree", 1, camXYZCallback);
+	//ros::Subscriber subCamVel = n.subscribe("/camera/vel/2degree", 1, camVelCallback);
 
-	ros::Publisher pub_imu = n.advertise<sensor_msgs::Imu>("/controller/data_raw", 1);
-
-	ros::Publisher chatter_pub = n.advertise<geometry_msgs::PointStamped>("/controls", 1);
-	ros::Publisher _chatter_pub = n.advertise<geometry_msgs::PointStamped>("/_controls", 1);
+	ros::Publisher chatter_pub = n.advertise<geometry_msgs::QuaternionStamped>("/controls", 1);
+	//ros::Publisher _chatter_pub = n.advertise<geometry_msgs::PointStamped>("/_controls", 1);
 	ros::Publisher chatter_imu_prefilter = n.advertise<sensor_msgs::Imu>("/imu/data_prefiltered", 1);
 	ros::Publisher chatter_rpy_prefilter = n.advertise<geometry_msgs::Vector3Stamped>("/imu/rpy/prefiltered", 1);
 	
@@ -181,17 +136,18 @@ int main(int argc, char **argv)
 
 	ros::Rate loop_rate(200);
 
-	double m = 0.4; // [kg]
+	double m = 0.45; // [kg]
 	double g = 9.81; // [m/c^2]
 
 	double I_xx = 0.02; //0.0464; // [kg*m^2] or 0.01
 	double I_yy = 0.02; //0.0464; // [kg*m^2] or 0.01
+	double I_zz = 0.02;
 
 	double k_x, a_x, k_y, a_y, k_z, a_z;
 	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
-	double k_teta, a_teta, k_phi, a_phi;
-	k_teta = a_teta = k_phi = a_phi = 5.0;
+	double k_teta, a_teta, k_phi, a_phi, k_psi, a_psi;
+	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 5.0;
 	
 	double dt = 1./200;
 	double dt_fwd = 1./200; 
@@ -200,21 +156,32 @@ int main(int argc, char **argv)
 	ROS_INFO("Steps equal to %d", N);
 	ROS_INFO("New steps equal to %d", _N);
 	
+	double t_prev = ros::Time::now().toSec();
+	double T = 0.02; // [s], filter param
+	double k_f = 1. / T;
+	
+	// PYTHON
+	double w_x = 0.;
+	double phi = 0.;
+	double w_y = 0.;
+	double teta = 0.;
+	double w_z = 0.;
+	double psi = 0.;
+	
 	double acc_filter_val_x = 0;
 	double acc_filter_val_y = 0;
 	double acc_filter_val_z = 0;
 	double gyro_filter_val_x = 0;
 	double gyro_filter_val_y = 0;
+	double gyro_filter_val_z = 0;
 	
-	double t_prev = ros::Time::now().toSec();
-	double T = 0.02; // [s], filter param
-	double k_f = 1. / T;
+	double w_x_measure, phi_measure;
+	double w_y_measure, teta_measure;
+	double w_z_measure, psi_measure;
 	
-	double w_x_measure;
-	double phi_measure;
-	double w_y_measure;
-	double teta_measure;
-	double psi_measure;
+	double _w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped;
+	double _w_y_stepped, _w_y_pf_stepped, _teta_stepped, _teta_pf_stepped;
+	double _w_z_stepped, _psi_stepped;
 
 	///ALTERNATIVE
 	Eigen::Matrix4d _F;
@@ -252,11 +219,13 @@ int main(int argc, char **argv)
 			  
 	Eigen::Matrix4d _H = Eigen::MatrixXd::Identity(4, 4);
 	
-	int _delay_N = 4;
+	int _delay_N = 8;
 	std::deque<double> _phi_delay_q(_delay_N, 0);
 	std::deque<double> _w_x_delay_q(_delay_N, 0);
 	std::deque<double> _teta_delay_q(_delay_N, 0);
 	std::deque<double> _w_y_delay_q(_delay_N, 0);
+	std::deque<double> _psi_delay_q(_delay_N, 0);
+	std::deque<double> _w_z_delay_q(_delay_N, 0);
 
 	std::deque<double> x_delay_q(_delay_N, 0);
 	std::deque<double> y_delay_q(_delay_N, 0);
@@ -279,16 +248,10 @@ int main(int argc, char **argv)
 	double _teta_pred = 0;
 	double _teta_pf_pred = 0;
 	
-	// PYTHON
-	double w_x = 0.;
-	double phi = 0.;
-	double w_y = 0.;
-	double teta = 0.;
-	double psi = 0.;
-	
-	double _w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped;
-	double _w_y_stepped, _w_y_pf_stepped, _teta_stepped, _teta_pf_stepped;
-	double _u1, _u2, _u3;
+	std::deque<double> _u4_kalman_q(_N, 0);
+	double _u4_kalman = 0;
+		
+	double _u1, _u2, _u3, _u4;
 
 	int count = 0;
 	while (ros::ok())
@@ -303,7 +266,7 @@ int main(int argc, char **argv)
 		bool modelOn = false;
 
 		
-		if (imuUp) //  && camXYZUp && camVelUp
+		if (imuUp && camXYZUp && camVelUp) //  && camXYZUp && camVelUp
 		{
 			//ROS_INFO("ITERATION %d", count);
 			
@@ -311,11 +274,17 @@ int main(int argc, char **argv)
 			//w_x += (_u2_kalman / I_xx) * dt;
 			//dr_file << ros::Time::now() << "," << w_x << "," << phi << "\n";
 			//ROS_INFO("w_x=%.8f phi=%.8f", w_x, phi);
+			double acc_x_offset = 0; 
+			double acc_y_offset = 0;
+			double acc_z_offset = 0;
+			
 			w_x = glob_angleVel_msg.angular_velocity.x;
 			w_y = glob_angleVel_msg.angular_velocity.y;
+			w_z = glob_angleVel_msg.angular_velocity.z;
 			phi = glob_angleVel_msg.linear_acceleration.x;
 			teta = glob_angleVel_msg.linear_acceleration.y;
 			psi = glob_angleVel_msg.linear_acceleration.z;
+			
 			if (!modelOn)
 			{
 				if (psi > 20)
@@ -324,20 +293,17 @@ int main(int argc, char **argv)
 					psi = 4;
 			}
 			
-			// AXES ALONG DIAGONAL
-			/*
-			const double pi = std::acos(-1);
-			double w_x_rot = std::cos(pi/4) * w_x - std::sin(pi/4) * w_y;
-			double w_y_rot = std::sin(pi/4) * w_x + std::cos(pi/4) * w_y;
-			double phi_rot = std::cos(pi/4) * phi - std::sin(pi/4) * teta;
-			double teta_rot = std::sin(pi/4) * phi + std::cos(pi/4) * teta;
-			w_x = w_x_rot;
-			w_y = w_y_rot;
-			phi = phi_rot;
-			teta = teta_rot;
-			*/
-			
 			//dr_file << glob_angleVel_msg.header.stamp << "," << w_x << "," << w_y << "," << phi << "," << teta << "," << psi << "\n";
+
+			// NO DELAY
+			
+			w_x_measure = w_x;
+			w_y_measure = w_y;
+			w_z_measure = w_z;
+			phi_measure = phi;
+			teta_measure = teta;
+			psi_measure = psi;
+			
 
 			// DELAY	
 			/*
@@ -354,36 +320,39 @@ int main(int argc, char **argv)
 			_w_y_delay_q.pop_front();
 			_teta_delay_q.push_back(teta);
 			_w_y_delay_q.push_back(w_y);
+			* 
+			psi_measure = _psi_delay_q.front();
+			w_z_measure = _w_z_delay_q.front();
+			_psi_delay_q.pop_front();
+			_w_z_delay_q.pop_front();
+			_psi_delay_q.push_back(psi);
+			_w_z_delay_q.push_back(w_z);
 			*/
-
-			// NO DELAY
 			
-			w_x_measure = w_x;
-			w_y_measure = w_y;
-			phi_measure = phi;
-			teta_measure = teta;
-			psi_measure = psi;
-			
-
 			// PREFILTER
 			acc_filter_val_x = acc_filter_val_x - 1/T * (acc_filter_val_x -  phi_measure) * dt_filter;
 			gyro_filter_val_x = gyro_filter_val_x - 1/T * (gyro_filter_val_x -  w_x_measure) * dt_filter;
-			
 			acc_filter_val_y = acc_filter_val_y - 1/T * (acc_filter_val_y -  teta_measure) * dt_filter;
 			gyro_filter_val_y = gyro_filter_val_y - 1/T * (gyro_filter_val_y -  w_y_measure) * dt_filter;
-			
 			acc_filter_val_z = acc_filter_val_z - 1/T * (acc_filter_val_z -  psi_measure) * dt_filter;
-			//dpf_file << ros::Time::now() << "," << gyro_filter_val_x << "," << gyro_filter_val_y << "," << acc_filter_val_x << "," << acc_filter_val_y << "," << acc_filter_val_z << "\n";
-			//ROS_INFO("w_x_pf=%.8f phi_pf=%.8f", gyro_filter_val_x, acc_filter_val_x);
+			gyro_filter_val_z = gyro_filter_val_z - 1/T * (gyro_filter_val_z -  w_z_measure) * dt_filter;
+			/// ALTERNATIVE
+			//acc_filter_val_x = phi_measure;
+			//gyro_filter_val_x = w_x_measure;
+			//acc_filter_val_y = teta_measure;
+			//gyro_filter_val_y = w_y_measure;
+			//acc_filter_val_z = psi_measure;
 
 			double w_x_pf = gyro_filter_val_x;
 			double w_y_pf = gyro_filter_val_y;
+			double w_z_pf = gyro_filter_val_z;
 
 			double phi_pf = 0, teta_pf = 0, psi_pf = 0;
 			if (modelOn)
 			{
 				phi_pf = acc_filter_val_x;
 				teta_pf = acc_filter_val_y;
+				psi_pf = acc_filter_val_z;
 			} else
 			{				
 				phi_measure = std::atan2(teta, psi);
@@ -392,9 +361,9 @@ int main(int argc, char **argv)
 				teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
 			}
 			
-			dr_file << glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure << "\n";
+			dr_file << glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << w_z_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure << "\n";
 			//ROS_INFO_STREAM(glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure);
-			dpf_file << ros::Time::now() << "," << w_x_pf << "," << w_y_pf << "," << phi_pf << "," << teta_pf << "," << psi_pf << "\n";
+			dpf_file << ros::Time::now() << "," << w_x_pf << "," << w_y_pf << "," << w_z_pf << "," << phi_pf << "," << teta_pf << "," << psi_pf << "\n";
 
 		
 			// STEP
@@ -408,6 +377,9 @@ int main(int argc, char **argv)
 			_teta_stepped = teta_measure;
 			_teta_pf_stepped = teta_pf;
 			
+			_w_z_stepped = w_z_measure;
+			_psi_stepped = psi_measure;
+			
 			for (int i = 0; i < _N; ++i)
 			{
 				_phi_stepped += _w_x_stepped * dt_fwd;
@@ -415,37 +387,33 @@ int main(int argc, char **argv)
 				
 				_teta_stepped += _w_y_stepped * dt_fwd;
 				_w_y_stepped += (_u3_kalman_q[i] / I_yy) * dt_fwd;
+			
+				_psi_stepped += _w_z_stepped * dt_fwd;
+				_w_z_stepped += (_u4_kalman_q[i] / I_zz) * dt_fwd;
 			}
 			
-			_dst_file << ros::Time::now() << "," << _w_x_stepped << "," << _w_y_stepped << "," << _phi_stepped << "," << _teta_stepped << "\n";
+			_dst_file << ros::Time::now() << "," << _w_x_stepped << "," << _w_y_stepped << "," << _w_z_stepped << "," << _phi_stepped << "," << _teta_stepped << _psi_stepped << "," << "\n";
 			
 			// KALMAN FILTER-4
 			/// x-axis
 			Eigen::Vector4d _Xx_k_prev {_w_x_pred, _w_x_pf_pred, _phi_pred, _phi_pf_pred};
 			Eigen::Vector4d _Xx_k = _F * _Xx_k_prev + _Bx * _u2_kalman;
-			//ROS_INFO_STREAM("_Xx_k_prev\n" << _Xx_k_prev << " \n_Xx_k\n" << _Xx_k << "\n");
 
 			_Px = _F * _Px * _F.transpose() + _Q;
-			//ROS_INFO_STREAM("_Px\n" << _Px  << "\n");
 
 			Eigen::Vector4d _Zx_k {_w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped}; // ZERO ANGLE
 			Eigen::Vector4d _Yx_k = _Zx_k - _H * _Xx_k;
-			//ROS_INFO_STREAM("_Zx_k\n" << _Zx_k << " \n_Yx_k\n" << _Yx_k << "\n");
 
 			Eigen::Matrix4d _Sx_k = _H * _Px * _H.transpose() + _R;
 			Eigen::Matrix4d _Kx_k = _Px * _H.transpose() * _Sx_k.inverse();
-			//ROS_INFO_STREAM("_Sx_k\n" << _Sx_k << "\n_Kx_k\n" << _Kx_k << "\n");
 
 			_Xx_k += _Kx_k * _Yx_k;
 			_Px = (Eigen::MatrixXd::Identity(4, 4) - _Kx_k * _H) * _Px;
-			//ROS_INFO_STREAM(" _Xx_k(new)\n" << _Xx_k << "\n");
-			//ROS_INFO_STREAM("_Px(new)\n" << _Px << "\n");
 
 			_w_x_pred = _Xx_k(0);
 			_w_x_pf_pred = _Xx_k(1);
 			_phi_pred = _Xx_k(2);
 			_phi_pf_pred = _Xx_k(3);
-			//ROS_INFO("_w_x_pred=%.8f _phi_pred=%.8f", _w_x_pred, _phi_pred);
 
 			/// y-axis
 			Eigen::Vector4d _Xy_k_prev {_w_y_pred, _w_y_pf_pred, _teta_pred, _teta_pf_pred};
@@ -466,7 +434,7 @@ int main(int argc, char **argv)
 			_w_y_pf_pred = _Xy_k(1);
 			_teta_pred = _Xy_k(2);
 			_teta_pf_pred = _Xy_k(3);
-			_dm_file << ros::Time::now() << "," << _w_x_pred << "," << _w_y_pred << "," << _w_x_pf_pred  << "," << _w_y_pf_pred << "," << _phi_pred << "," << _teta_pred << "\n";
+			_dm_file << ros::Time::now() << "," << _w_x_pred << "," << _w_y_pred << "," << 0  << "," << _phi_pred << "," << _teta_pred << "," << 0 << "," << _w_x_pf_pred  << "," << _w_y_pf_pred << "," << 0 << "\n";
 			
 			// CAMERA
 			double x_cam = 0, y_cam = 0, z_cam = 0;
@@ -475,17 +443,19 @@ int main(int argc, char **argv)
 
 			double x_cam_measure = 0, y_cam_measure = 0, z_cam_measure = 0;
 			double dx_cam_measure = 0, dy_cam_measure = 0, dz_cam_measure = 0;
-			if (modelOn && camXYZUp && camVelUp)
+			if (camXYZUp && camVelUp) // modelOn
 			{
 				// NO DELAY
+				
 				x_cam = x_cam_measure = glob_camXYZ_msg.vector.x;
 				y_cam = y_cam_measure = glob_camXYZ_msg.vector.y;
 				z_cam = z_cam_measure = glob_camXYZ_msg.vector.z;
 				dx_cam = dx_cam_measure = glob_camVel_msg.vector.x;
 				dy_cam = dy_cam_measure = glob_camVel_msg.vector.y;
 				dz_cam = dz_cam_measure = glob_camVel_msg.vector.z;
-
+				
 				// DELAY
+				/*
 				x_cam = x_delay_q.front();
 				dx_cam = dx_delay_q.front();
 				x_delay_q.pop_front();
@@ -506,15 +476,15 @@ int main(int argc, char **argv)
 				dz_delay_q.pop_front();
 				z_delay_q.push_back(z_cam_measure);
 				dz_delay_q.push_back(dz_cam_measure);
-
+				*/
 			}
 
-			double H_xx = - (a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref);
-			double H_yy = - (a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref);
+			double H_xx = - (a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref) * 0;
+			double H_yy = - (a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref) * 0;
 			double H_zz = - (a_z+k_z)*dz_cam - a_z*k_z*(z_cam-z_ref) + g;
 
 			double phi_ref = 0, teta_ref = 0;
-			if (modelOn && camXYZUp && camVelUp)
+			if (camXYZUp && camVelUp) // modelOn
 			{
 				teta_ref = std::atan2(H_xx, H_zz);
 				phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
@@ -524,41 +494,63 @@ int main(int argc, char **argv)
 					<< dx_cam << "," << dy_cam << "," << dz_cam << "\n";
 
 			// CONTROLS
-			phi_ref = teta_ref = 0; // no camera
-			_u1 = m * g; // no camera
+			phi_ref = 0; // no camera
+			teta_ref = 0; // no camera
+			//_u1 = m * g; // no camera
+			_u1 = m * sqrt(H_zz*H_zz); // only z-axis
 			//_u1 = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz); // with camera
 			//_u2 = I_xx * (-(a_phi+k_phi)*0 - a_phi*k_phi*(0.5)); // ESC test
-			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)); // ZERO replaced _w_x_pred
-			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)); // ZERO
+			//_u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref)); // ZERO replaced _w_x_pred
+			//_u3 = I_yy * (-(a_teta+k_teta)*_w_y_pred - a_teta*k_teta*(_teta_pred-teta_ref)); // ZERO
 			
+			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)) * 0; // ZERO replaced _w_x_pred
+			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)) * 0; // ZERO
+			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*_psi_stepped) *0;
+			
+			// LIMITS
+			
+			if (_u1 > 8)
+				_u1 = 8;
+			
+			if (!modelOn)
+			{
+				_u1 = _u1 < glob_remote_msg.point.x ? _u1 : glob_remote_msg.point.x;
+				_u2 += glob_remote_msg.point.y;
+				_u3 += glob_remote_msg.point.z;
+			}
+			double ulim = 0.15;
+			double unorm = sqrt(_u2*_u2+_u3*_u3);	
+			if (unorm > ulim)
+			{
+				_u2 *= ulim / unorm;
+				_u3 *= ulim / unorm;
+			}
+			if (_u4 > ulim)
+				_u4 = ulim;
+
 			_u2_kalman = _u2;
 			_u3_kalman = _u3;
-			//ROS_INFO("_u2=%.8f", _u2);
+			_u4_kalman = _u4;
 
-			_u_file << ros::Time::now() << "," << _u1 << "," << _u2 << "," << _u3 << "\n";
+			_u_file << ros::Time::now() << "," << _u1 << "," << _u2 << "," << _u3 << "," << _u4 << "\n";
 			
 			if (_N != 0)
 			{
 				_u2_kalman_q.pop_front();
 				_u2_kalman_q.push_back(_u2);
-				
 				_u3_kalman_q.pop_front();
 				_u3_kalman_q.push_back(_u3);
+				_u4_kalman_q.pop_front();
+				_u4_kalman_q.push_back(_u4);
 			}
 			
-			// MESSAGES
-			sensor_msgs::Imu msg_imu;
-			msg_imu.header.stamp = ros::Time::now();
-			msg_imu.angular_velocity.x = w_x_measure;
-			msg_imu.linear_acceleration.x = phi_measure;
-			msg_imu.angular_velocity.y = w_y_measure;
-			msg_imu.linear_acceleration.y = teta_measure;
-			
-			geometry_msgs::PointStamped msg;
+			// MESSAGES			
+			geometry_msgs::QuaternionStamped msg;
 			msg.header.stamp = ros::Time::now();
-			msg.point.x = _u1;
-			msg.point.y = _u2;
-			msg.point.z = _u3;
+			msg.quaternion.x = _u1;
+			msg.quaternion.y = _u2;
+			msg.quaternion.z = _u3;
+			msg.quaternion.w = _u4;
 			
 			sensor_msgs::Imu msg_pf;
 			msg_pf.header.stamp = ros::Time::now();
@@ -571,16 +563,19 @@ int main(int argc, char **argv)
 			_msg_st.header.stamp = ros::Time::now();
 			_msg_st.angular_velocity.x = _w_x_stepped;
 			_msg_st.angular_velocity.y = _w_y_stepped;
+			_msg_st.angular_velocity.z = _w_z_stepped;
 			
 			geometry_msgs::Vector3Stamped _msg_rpy_stepped;
 			_msg_rpy_stepped.header.stamp = ros::Time::now();
 			_msg_rpy_stepped.vector.x = _phi_stepped;
 			_msg_rpy_stepped.vector.y = _teta_stepped;
+			_msg_rpy_stepped.vector.z = _psi_stepped;
 			
 			sensor_msgs::Imu _msg_mod;
 			_msg_mod.header.stamp = ros::Time::now();
 			_msg_mod.angular_velocity.x = _w_x_pred;
 			_msg_mod.angular_velocity.y = _w_y_pred;
+			_msg_mod.angular_velocity.z = 0;
 			
 			geometry_msgs::Vector3Stamped _msg_rpy_pred;
 			_msg_rpy_pred.header.stamp = ros::Time::now();
@@ -588,9 +583,7 @@ int main(int argc, char **argv)
 			_msg_rpy_pred.vector.y = _teta_pred;
 			_msg_rpy_pred.vector.z = 0;
 			
-			// PUBLISHERS
-			pub_imu.publish(msg_imu);
-			
+			// PUBLISHERS			
 			chatter_pub.publish(msg);
 			chatter_imu_prefilter.publish(msg_pf);
 			_chatter_imu_stepped.publish(_msg_st);

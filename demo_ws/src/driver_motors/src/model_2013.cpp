@@ -6,6 +6,8 @@
 #include <geometry_msgs/Vector3Stamped.h>
 #include <sensor_msgs/Imu.h>
 
+#include <tf/transform_datatypes.h>
+
 #include <cmath>
 #include <signal.h>
 
@@ -17,6 +19,7 @@ class Model {
 		ros::Publisher pubImu;
 		ros::Publisher pubXYZ;
 		ros::Publisher pubVel;
+		ros::Publisher pubPose;
 
 		ros::Subscriber subControls;
 		
@@ -94,7 +97,7 @@ class Model {
 		geometry_msgs::PointStamped glob_msg_control;
     
     public:
-		static constexpr double M = 0.4; // [kg]
+		static constexpr double M = 0.45; // [kg]
 		static constexpr double G = 9.81; // [m/s^2]
 	
 		static constexpr double I_xx = 0.02;
@@ -119,6 +122,7 @@ class Model {
 			pubImu = nh->advertise<sensor_msgs::Imu>("/imu/data_raw", 1);
 			pubXYZ = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/xyz", 1);
 			pubVel = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/vel", 1);
+			pubPose = nh->advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 1);
 		}
 		
 		void set_control(const double *_u) {
@@ -131,26 +135,26 @@ class Model {
 		void step(double dt) {
 			if (controlsUp)
 			{
-			phi += dot_phi * dt;
-			teta += dot_teta * dt;
-			psi += dot_psi * dt;
-			
-			dot_phi += (u[1] - (I_zz - I_yy) * dot_teta * dot_psi) / I_xx * dt;
-			dot_teta += (u[2] - (I_xx - I_zz) * dot_phi * dot_psi) / I_yy * dt;
-			dot_psi += u[3] / I_zz * dt;
-			
-			dot_x += ((sin(psi) * sin(phi) + cos(psi) * cos(phi) * sin(teta)) * u[0] / mass) * dt;
-			x += dot_x * dt;
-			
-			dot_y += ((- cos(psi) * sin(phi) + sin(psi) * cos(phi) * sin(teta)) * u[0] / mass) * dt;
-			y += dot_y * dt;
-			
+				phi += dot_phi * dt;
+				teta += dot_teta * dt;
+				psi += dot_psi * dt;
+				
+				dot_phi += (u[1] - (I_zz - I_yy) * dot_teta * dot_psi) / I_xx * dt;
+				dot_teta += (u[2] - (I_xx - I_zz) * dot_phi * dot_psi) / I_yy * dt;
+				dot_psi += u[3] / I_zz * dt;
+				
+				dot_x += ((sin(psi) * sin(phi) + cos(psi) * cos(phi) * sin(teta)) * u[0] / mass) * dt;
+				x += dot_x * dt;
 
-			double R = 0;
-			//if (z < 0.22)
-			//	R = mass * G;
-			dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
-			z += dot_z * dt;
+				dot_y += ((- cos(psi) * sin(phi) + sin(psi) * cos(phi) * sin(teta)) * u[0] / mass) * dt;
+				y += dot_y * dt;
+				
+
+				double R = 0;
+				//if (z < 0.22)
+				//	R = mass * G;
+				dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
+				z += dot_z * dt;
 			}
 		}
 		
@@ -167,6 +171,10 @@ class Model {
 
 			//ROS_INFO("Controls (%f, %f, %f, %f)", u[0], u[1], u[2], u[3]);
 
+			tf::Quaternion quat;
+			quat.setRPY(phi, teta, psi);
+			quat = quat.normalize();
+
 			// MESSAGES
 			sensor_msgs::Imu msg_imu;
 			msg_imu.header.stamp = ros::Time::now();
@@ -176,6 +184,20 @@ class Model {
 			msg_imu.linear_acceleration.x = phi;
 			msg_imu.linear_acceleration.y = teta;
 			msg_imu.linear_acceleration.z = psi;
+
+			geometry_msgs::PoseStamped msg_pose;
+			msg_pose.header.stamp = ros::Time::now();
+			msg_pose.pose.position.x = x;
+			msg_pose.pose.position.y = y;
+			msg_pose.pose.position.z = z;
+			msg_pose.pose.orientation.x = quat.getX();
+			msg_pose.pose.orientation.y = quat.getY();
+			msg_pose.pose.orientation.z = quat.getZ();
+			msg_pose.pose.orientation.w = quat.getW();
+			//tf::Matrix3x3 m(quat);
+			//double roll, pitch, yaw;
+			//m.getRPY(roll, pitch, yaw);
+			//ROS_INFO("%f %f %f %f angles (%f,%f,%f)", quat.getX(), quat.getY(), quat.getZ(), quat.getW(), roll, pitch, yaw);
 
 			geometry_msgs::Vector3Stamped msg_xyz;
 			msg_xyz.header.stamp = ros::Time::now();
@@ -189,12 +211,11 @@ class Model {
 			msg_vel.vector.y = dot_y;
 			msg_vel.vector.z = dot_z;
 
-			//std_msgs::Int64 msg_counter;
-			//msg_counter.data = counter;
-			//pub.publish(msg_counter);
+
 			pubImu.publish(msg_imu);
 			pubXYZ.publish(msg_xyz);
 			pubVel.publish(msg_vel);
+			pubPose.publish(msg_pose);
 		}
 		
 		void callback_controls(const geometry_msgs::PointStamped& msg) {
