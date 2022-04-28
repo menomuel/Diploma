@@ -2,6 +2,7 @@
 
 #include <std_msgs/Int64.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/QuaternionStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <sensor_msgs/Imu.h>
@@ -19,6 +20,7 @@ class Model {
 		ros::Publisher pubImu;
 		ros::Publisher pubXYZ;
 		ros::Publisher pubVel;
+		ros::Publisher pubRPY;
 		ros::Publisher pubPose;
 
 		ros::Subscriber subControls;
@@ -94,7 +96,7 @@ class Model {
 		
 	
 		
-		geometry_msgs::PointStamped glob_msg_control;
+		geometry_msgs::QuaternionStamped glob_msg_control;
     
     public:
 		static constexpr double M = 0.45; // [kg]
@@ -105,7 +107,7 @@ class Model {
 		static constexpr double I_zz = 0.02;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0, double _phi=0, double _teta=0, double _psi=0, double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0, double _phi=0., double _teta=0., double _psi=0., double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{
@@ -118,10 +120,10 @@ class Model {
 			counter = 0; 
 			subControls = nh->subscribe("/controls", 1,	&Model::callback_controls, this);
 			
-			//pub = nh->advertise<std_msgs::Int64>("/number_count", 1);   
 			pubImu = nh->advertise<sensor_msgs::Imu>("/imu/data_raw", 1);
-			pubXYZ = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/xyz", 1);
-			pubVel = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/vel", 1);
+			pubXYZ = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/xyz/kalman", 1);
+			pubVel = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/vel/kalman", 1);
+			pubRPY = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/rpy/kalman", 1);
 			pubPose = nh->advertise<geometry_msgs::PoseStamped>("/mavros/vision_pose/pose", 1);
 		}
 		
@@ -151,8 +153,8 @@ class Model {
 				
 
 				double R = 0;
-				//if (z < 0.22)
-				//	R = mass * G;
+				if (z < 0.22)
+					R = mass * G;
 				dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
 				z += dot_z * dt;
 			}
@@ -164,7 +166,8 @@ class Model {
 			
 			//ROS_INFO("dt %f", dt);
 
-			double _u[4] {glob_msg_control.point.x, glob_msg_control.point.y, glob_msg_control.point.z, 0.};
+			double _u[4] {glob_msg_control.quaternion.x, glob_msg_control.quaternion.y,
+					glob_msg_control.quaternion.z, glob_msg_control.quaternion.w};
 			set_control(_u);
 			step(dt);
 
@@ -175,7 +178,7 @@ class Model {
 			quat.setRPY(phi, teta, psi);
 			quat = quat.normalize();
 
-			// MESSAGES
+			// IMU MESSAGE
 			sensor_msgs::Imu msg_imu;
 			msg_imu.header.stamp = ros::Time::now();
 			msg_imu.angular_velocity.x = dot_phi;
@@ -184,7 +187,14 @@ class Model {
 			msg_imu.linear_acceleration.x = phi;
 			msg_imu.linear_acceleration.y = teta;
 			msg_imu.linear_acceleration.z = psi;
+			pubImu.publish(msg_imu);
 
+			++counter;
+			if (counter == 15) // 300/15=20hz
+			{
+			counter = 0;
+
+			// CAMERA MESSAGE
 			geometry_msgs::PoseStamped msg_pose;
 			msg_pose.header.stamp = ros::Time::now();
 			msg_pose.pose.position.x = x;
@@ -211,16 +221,21 @@ class Model {
 			msg_vel.vector.y = dot_y;
 			msg_vel.vector.z = dot_z;
 
+			geometry_msgs::Vector3Stamped msg_rpy;
+			msg_rpy.header.stamp = ros::Time::now();
+			msg_rpy.vector.x = phi;
+			msg_rpy.vector.y = teta;
+			msg_rpy.vector.z = psi;
 
-			pubImu.publish(msg_imu);
-			pubXYZ.publish(msg_xyz);
-			pubVel.publish(msg_vel);
+			//pubXYZ.publish(msg_xyz);
+			//pubVel.publish(msg_vel);
+			//pubRPY.publish(msg_rpy);
 			pubPose.publish(msg_pose);
+			}
 		}
 		
-		void callback_controls(const geometry_msgs::PointStamped& msg) {
+		void callback_controls(const geometry_msgs::QuaternionStamped& msg) {
 			glob_msg_control = msg;
-			counter += 1;
 			controlsUp = true;
 		}
 };

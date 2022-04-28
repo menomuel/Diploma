@@ -213,6 +213,9 @@ class Model:
         self.u = u
 
     def step(self, dt):
+        '''
+        # My model
+
         self.psi += self.dot.psi * dt
         self.phi += self.dot.phi * dt
         self.theta += self.dot.theta * dt
@@ -220,22 +223,9 @@ class Model:
         self.dot.phi += (self.u[1] - (Izz - Iyy) * self.dot.theta * self.dot.psi) / Ixx * dt
         self.dot.theta += (self.u[2] - (Ixx - Izz) * self.dot.phi * self.dot.psi) / Iyy * dt
         self.dot.psi += self.u[3] / Izz * dt
-        
-        # move
-        self.dot.x += ((sin(self.psi) * sin(self.phi) + cos(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
-        self.x += (self.dot.x) * dt
+        '''
+       #Sasha's model
 
-        self.dot.y += ((-cos(self.psi) * sin(self.phi) + sin(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
-        self.y += (self.dot.y) * dt
-
-        R = 0.
-        if (self.z<0.22):
-            R = self.mass * G
-
-        self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - self.mass * G + R) / self.mass * dt
-        self.z += self.dot.z * dt # self.dot.z = 0.
-        
-        '''	
         # simple model for angles
 #        self.phi = self.u[1]
 #        self.theta = self.u[2]
@@ -274,5 +264,17 @@ class Model:
         self.psi += self.dot.psi * dt
         self.phi += self.dot.phi * dt
         self.theta += self.dot.theta * dt
-		'''
+        
+        # move
+        self.dot.x += ((sin(self.psi) * sin(self.phi) + cos(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
+        self.x += (self.dot.x) * dt
 
+        self.dot.y += ((-cos(self.psi) * sin(self.phi) + sin(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
+        self.y += (self.dot.y) * dt
+
+        R = 0.
+        if (self.z<0.22):
+            R = self.mass * G
+
+        self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - self.mass * G + R) / self.mass * dt
+        self.z += self.dot.z * dt # self.dot.z = 0.

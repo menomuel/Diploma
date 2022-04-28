@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 	ros::Subscriber subRemote = n.subscribe("/remote", 1, remoteCallback);
 	ros::Subscriber subCamXYZ = n.subscribe("/camera/xyz/kalman", 1, camXYZCallback);
 	ros::Subscriber subCamVel = n.subscribe("/camera/vel/kalman", 1, camVelCallback);
+	ros::Subscriber subCamRPY = n.subscribe("/camera/rpy/kalman", 1, camRPYCallback);
 	//ros::Subscriber subCamXYZ = n.subscribe("/camera/xyz/2degree", 1, camXYZCallback);
 	//ros::Subscriber subCamVel = n.subscribe("/camera/vel/2degree", 1, camVelCallback);
 
@@ -147,7 +148,7 @@ int main(int argc, char **argv)
 	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
 	double k_teta, a_teta, k_phi, a_phi, k_psi, a_psi;
-	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 5.0;
+	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 16.0; // 5.0;
 	
 	double dt = 1./200;
 	double dt_fwd = 1./200; 
@@ -157,7 +158,7 @@ int main(int argc, char **argv)
 	ROS_INFO("New steps equal to %d", _N);
 	
 	double t_prev = ros::Time::now().toSec();
-	double T = 0.02; // [s], filter param
+	double T = 0.05; // [s], filter param
 	double k_f = 1. / T;
 	
 	// PYTHON
@@ -263,10 +264,9 @@ int main(int argc, char **argv)
 
 		//double dt_filter = dt; // FOR PYTHON CODE TESTING
 
-		bool modelOn = false;
-
+		bool modelOn = true;
 		
-		if (imuUp && camXYZUp && camVelUp) //  && camXYZUp && camVelUp
+		if (imuUp && camXYZUp && camVelUp && camRPYUp) //  && camXYZUp && camVelUp && camRPYUp WITH CAMERA
 		{
 			//ROS_INFO("ITERATION %d", count);
 			
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
 			phi = glob_angleVel_msg.linear_acceleration.x;
 			teta = glob_angleVel_msg.linear_acceleration.y;
 			psi = glob_angleVel_msg.linear_acceleration.z;
-			
+
 			if (!modelOn)
 			{
 				if (psi > 20)
@@ -378,8 +378,9 @@ int main(int argc, char **argv)
 			_teta_pf_stepped = teta_pf;
 			
 			_w_z_stepped = w_z_measure;
-			_psi_stepped = psi_measure;
-			
+			//_psi_stepped = psi_measure; // psi from imu
+			_psi_stepped = glob_camRPY_msg.vector.z; //psi from camera
+
 			for (int i = 0; i < _N; ++i)
 			{
 				_phi_stepped += _w_x_stepped * dt_fwd;
@@ -392,7 +393,7 @@ int main(int argc, char **argv)
 				_w_z_stepped += (_u4_kalman_q[i] / I_zz) * dt_fwd;
 			}
 			
-			_dst_file << ros::Time::now() << "," << _w_x_stepped << "," << _w_y_stepped << "," << _w_z_stepped << "," << _phi_stepped << "," << _teta_stepped << _psi_stepped << "," << "\n";
+			_dst_file << ros::Time::now() << "," << _w_x_stepped << "," << _w_y_stepped << "," << _w_z_stepped << "," << _phi_stepped << "," << _teta_stepped << "," << _psi_stepped << "," << "\n";
 			
 			// KALMAN FILTER-4
 			/// x-axis
@@ -439,7 +440,7 @@ int main(int argc, char **argv)
 			// CAMERA
 			double x_cam = 0, y_cam = 0, z_cam = 0;
 			double dx_cam = 0, dy_cam = 0, dz_cam = 0;
-			double x_ref = 0, y_ref = 0, z_ref = 1;
+			double x_ref = 0, y_ref = 0, z_ref = 1.;
 
 			double x_cam_measure = 0, y_cam_measure = 0, z_cam_measure = 0;
 			double dx_cam_measure = 0, dy_cam_measure = 0, dz_cam_measure = 0;
@@ -505,7 +506,7 @@ int main(int argc, char **argv)
 			
 			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)) * 0; // ZERO replaced _w_x_pred
 			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)) * 0; // ZERO
-			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*_psi_stepped) *0;
+			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*_psi_stepped) * 0;
 			
 			// LIMITS
 			
@@ -518,15 +519,19 @@ int main(int argc, char **argv)
 				_u2 += glob_remote_msg.point.y;
 				_u3 += glob_remote_msg.point.z;
 			}
-			double ulim = 0.15;
+			double ulim = 0.5; // model - 0.5, flight - 0.15;
 			double unorm = sqrt(_u2*_u2+_u3*_u3);	
 			if (unorm > ulim)
 			{
 				_u2 *= ulim / unorm;
 				_u3 *= ulim / unorm;
 			}
+
 			if (_u4 > ulim)
 				_u4 = ulim;
+			else if (_u4 < -ulim)
+				_u4 = -ulim;
+			
 
 			_u2_kalman = _u2;
 			_u3_kalman = _u3;
@@ -558,6 +563,8 @@ int main(int argc, char **argv)
 			msg_pf.angular_velocity.x = gyro_filter_val_x;
 			msg_pf.linear_acceleration.y = acc_filter_val_y;
 			msg_pf.angular_velocity.y = gyro_filter_val_y;
+			msg_pf.linear_acceleration.z = acc_filter_val_z;
+			msg_pf.angular_velocity.z = gyro_filter_val_z;
 			
 			sensor_msgs::Imu _msg_st;
 			_msg_st.header.stamp = ros::Time::now();

@@ -320,7 +320,7 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	//controls_msg = msg;
 
 	double l = 0.12 * (sqrt(2)/2); // [m] * cos(pi/4)
-	double k = 1.; //0.15;
+	double k = 0.05; //0.15;
 
 	// NORMAL AXES
 	Eigen::Matrix4d mat;
@@ -332,10 +332,10 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	//mat <<    1.,  1.,  1.,  1.,
 	//		   l,   l,  -l,  -l,
 	//		   -l,  l,  l,   -l,
-	//		   -k,  k,   -k,  k;
+	//		   k,  -k,   k,  -k;
 
 	//Eigen::Vector4d u(msg.point.x, msg.point.y, msg.point.z, 0.);
-	Eigen::Vector4d u(msg.quaternion.x, msg.quaternion.y, msg.quaternion.z, msg.quaternion.w * 0);
+	Eigen::Vector4d u(msg.quaternion.x, msg.quaternion.y, msg.quaternion.z, msg.quaternion.w);
 
 	/*
 	u[0] = u[0] < remote_u1 ? u[0] : remote_u1;
