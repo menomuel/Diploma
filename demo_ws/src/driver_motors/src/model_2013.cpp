@@ -18,6 +18,7 @@ class Model {
 		int counter;
 		//ros::Publisher pub;
 		ros::Publisher pubImu;
+		ros::Publisher pubRef;
 		ros::Publisher pubXYZ;
 		ros::Publisher pubVel;
 		ros::Publisher pubRPY;
@@ -107,7 +108,7 @@ class Model {
 		static constexpr double I_zz = 0.02;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0, double _phi=0., double _teta=0., double _psi=0., double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0., double _phi=0., double _teta=0., double _psi=-0.25, double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{
@@ -121,6 +122,7 @@ class Model {
 			subControls = nh->subscribe("/controls", 1,	&Model::callback_controls, this);
 			
 			pubImu = nh->advertise<sensor_msgs::Imu>("/imu/data_raw", 1);
+			pubRef = nh->advertise<geometry_msgs::QuaternionStamped>("/camera/ref", 1);
 			pubXYZ = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/xyz/kalman", 1);
 			pubVel = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/vel/kalman", 1);
 			pubRPY = nh->advertise<geometry_msgs::Vector3Stamped>("/camera/rpy/kalman", 1);
@@ -195,6 +197,9 @@ class Model {
 			counter = 0;
 
 			// CAMERA MESSAGE
+			geometry_msgs::QuaternionStamped msg_ref;
+			msg_ref.header.stamp = ros::Time::now();
+
 			geometry_msgs::PoseStamped msg_pose;
 			msg_pose.header.stamp = ros::Time::now();
 			msg_pose.pose.position.x = x;
@@ -227,6 +232,7 @@ class Model {
 			msg_rpy.vector.y = teta;
 			msg_rpy.vector.z = psi;
 
+			//pubRef.publish(msg_ref);
 			//pubXYZ.publish(msg_xyz);
 			//pubVel.publish(msg_vel);
 			//pubRPY.publish(msg_rpy);

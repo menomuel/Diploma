@@ -10,6 +10,7 @@
 #include <queue>
 #include <deque>
 #include <sstream>
+#include <random>
 
 #include <eigen3/Eigen/Dense>
 
@@ -23,6 +24,7 @@ sensor_msgs::Imu glob_angleVel_msg;
 geometry_msgs::Vector3Stamped glob_camXYZ_msg;
 geometry_msgs::Vector3Stamped glob_camVel_msg;
 geometry_msgs::Vector3Stamped glob_camRPY_msg;
+geometry_msgs::QuaternionStamped glob_camRef_msg;
 
 geometry_msgs::PointStamped glob_remote_msg;
 
@@ -30,6 +32,8 @@ bool imuUp = false;
 bool camXYZUp = false; // separate for XYZ and Vel??
 bool camVelUp = false; // separate for XYZ and Vel??
 bool camRPYUp = false;
+bool camRefUp = false;
+
 
 void rpyCallback(const geometry_msgs::Vector3Stamped& msg)
 {
@@ -73,6 +77,12 @@ void camRPYCallback(const geometry_msgs::Vector3Stamped& msg)
 	glob_camRPY_msg = msg;
 	if (!camRPYUp)
 		camRPYUp = true;
+}
+
+void camRefCallback(const geometry_msgs::QuaternionStamped& msg)
+{
+	glob_camRef_msg = msg;
+	camRefUp = true;
 }
 
 int main(int argc, char **argv)
@@ -119,6 +129,7 @@ int main(int argc, char **argv)
 	ros::Subscriber subCamRPY = n.subscribe("/camera/rpy/kalman", 1, camRPYCallback);
 	//ros::Subscriber subCamXYZ = n.subscribe("/camera/xyz/2degree", 1, camXYZCallback);
 	//ros::Subscriber subCamVel = n.subscribe("/camera/vel/2degree", 1, camVelCallback);
+	ros::Subscriber subCamRef = n.subscribe("/camera/ref", 1, camRefCallback);
 
 	ros::Publisher chatter_pub = n.advertise<geometry_msgs::QuaternionStamped>("/controls", 1);
 	//ros::Publisher _chatter_pub = n.advertise<geometry_msgs::PointStamped>("/_controls", 1);
@@ -266,7 +277,7 @@ int main(int argc, char **argv)
 
 		bool modelOn = true;
 		
-		if (imuUp && camXYZUp && camVelUp && camRPYUp) //  && camXYZUp && camVelUp && camRPYUp WITH CAMERA
+		if (imuUp && camXYZUp && camVelUp && camRPYUp && camRefUp) //  && camXYZUp && camVelUp && camRPYUp WITH CAMERA
 		{
 			//ROS_INFO("ITERATION %d", count);
 			
@@ -278,12 +289,27 @@ int main(int argc, char **argv)
 			double acc_y_offset = 0;
 			double acc_z_offset = 0;
 			
+
 			w_x = glob_angleVel_msg.angular_velocity.x;
 			w_y = glob_angleVel_msg.angular_velocity.y;
 			w_z = glob_angleVel_msg.angular_velocity.z;
 			phi = glob_angleVel_msg.linear_acceleration.x;
 			teta = glob_angleVel_msg.linear_acceleration.y;
 			psi = glob_angleVel_msg.linear_acceleration.z;
+
+			// Noise
+			
+			std::random_device rd{};
+			std::mt19937 gen{rd()};
+			std::normal_distribution<> d_w{0,0.05};
+			std::normal_distribution<> d_a{0,0.01};
+			//w_x += d_w(gen);
+			//w_y += d_w(gen);
+			//w_z += d_w(gen);
+			//phi += d_a(gen);
+			//teta += d_a(gen);
+			//psi += d_a(gen);
+			
 
 			if (!modelOn)
 			{
@@ -495,18 +521,22 @@ int main(int argc, char **argv)
 					<< dx_cam << "," << dy_cam << "," << dz_cam << "\n";
 
 			// CONTROLS
-			phi_ref = 0; // no camera
-			teta_ref = 0; // no camera
+			//phi_ref = 0; // no camera
+			//teta_ref = 0; // no camera
+			phi_ref = glob_camRef_msg.quaternion.y; // no camera
+			teta_ref = glob_camRef_msg.quaternion.z;
+
 			//_u1 = m * g; // no camera
-			_u1 = m * sqrt(H_zz*H_zz); // only z-axis
+			//_u1 = m * sqrt(H_zz*H_zz); // only z-axis
+			_u1 = glob_camRef_msg.quaternion.x; // ALTERNATIVE
 			//_u1 = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz); // with camera
 			//_u2 = I_xx * (-(a_phi+k_phi)*0 - a_phi*k_phi*(0.5)); // ESC test
 			//_u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref)); // ZERO replaced _w_x_pred
 			//_u3 = I_yy * (-(a_teta+k_teta)*_w_y_pred - a_teta*k_teta*(_teta_pred-teta_ref)); // ZERO
 			
-			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)) * 0; // ZERO replaced _w_x_pred
-			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)) * 0; // ZERO
-			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*_psi_stepped) * 0;
+			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)); // ZERO replaced _w_x_pred
+			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)); // ZERO
+			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*_psi_stepped);
 			
 			// LIMITS
 			
