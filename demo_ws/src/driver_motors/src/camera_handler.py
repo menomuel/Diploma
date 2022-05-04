@@ -236,11 +236,12 @@ def camera_handler():
 		H_yy = - (a_y+k_y)*x_estimated[4] - a_y*k_y*(x_estimated[1]-y_ref)
 		H_zz = - (a_z+k_z)*x_estimated[5] - a_z*k_z*(x_estimated[2]-z_ref) + g
 		
+		#rospy.loginfo("H_xx=%f H_yy=%f H_zz=%f", H_xx, H_yy, H_zz)
 
 		if controlUp:
-			torque_ref = M * sqrt(H_zz*H_zz) # M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
-			teta_ref = arctan2(H_xx, H_zz) * 0
-			phi_ref = arctan2(- H_yy, sqrt(H_xx*H_xx + H_zz*H_zz)) * 0
+			torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz) # M * sqrt(H_zz*H_zz)
+			teta_ref = arctan2(H_xx, H_zz) * 1
+			phi_ref = arctan2(- H_yy, sqrt(H_xx*H_xx + H_zz*H_zz)) * 1
 			psi_ref = 0
 
 		# Model step
@@ -319,7 +320,7 @@ def camera_handler():
 		
 		rate.sleep()
 
-	camRawFile.close()
+	#camRawFile.close()
 	#camStFile.close()
 	#camKalFile.close()
 	#cam2degFile.close()

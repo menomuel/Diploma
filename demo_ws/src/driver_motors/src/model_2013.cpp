@@ -78,7 +78,9 @@ class Model {
 		
 		double dot_x, dot_y, dot_z;
 		double dot_phi, dot_teta, dot_psi;
-		
+	
+		double torque_ref, phi_ref, teta_ref, psi_ref;
+
 		double t_prev;
 		double u[4];
 
@@ -108,7 +110,7 @@ class Model {
 		static constexpr double I_zz = 0.02;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0., double _phi=0., double _teta=0., double _psi=-0.25, double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0., double _phi=0., double _teta=0., double _psi=0.0, double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{
@@ -159,6 +161,24 @@ class Model {
 					R = mass * G;
 				dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
 				z += dot_z * dt;
+
+				// Calculate references
+				double m = 0.45; // [kg]
+				double g = 9.81; // [m/s^2]
+
+				double x_ref = 0., y_ref = 0.2, z_ref = 1.;
+				double a_x, k_x, a_y, k_y, a_z, k_z;
+				a_x = k_x = a_y = k_y = a_z = k_z = 4.;
+
+				double H_xx = - (a_x+k_x)*dot_x - a_x*k_x*(x-x_ref);
+				double H_yy = - (a_y+k_y)*dot_y - a_y*k_y*(y-y_ref);
+            	double H_zz = - (a_z+k_z)*dot_z - a_z*k_z*(z-z_ref) + g;
+
+				torque_ref = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz);
+                teta_ref = std::atan2(H_xx, H_zz);
+                phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
+				psi_ref = 0;
+
 			}
 		}
 		
@@ -192,13 +212,17 @@ class Model {
 			pubImu.publish(msg_imu);
 
 			++counter;
-			if (counter == 15) // 300/15=20hz
+			if (counter == 15) // 300/15=20hz //if (true)
 			{
 			counter = 0;
 
 			// CAMERA MESSAGE
 			geometry_msgs::QuaternionStamped msg_ref;
 			msg_ref.header.stamp = ros::Time::now();
+			msg_ref.quaternion.x = torque_ref;
+			msg_ref.quaternion.y = phi_ref;
+			msg_ref.quaternion.z = teta_ref;
+			msg_ref.quaternion.w = psi_ref;
 
 			geometry_msgs::PoseStamped msg_pose;
 			msg_pose.header.stamp = ros::Time::now();

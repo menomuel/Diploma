@@ -466,7 +466,7 @@ int main(int argc, char **argv)
 			// CAMERA
 			double x_cam = 0, y_cam = 0, z_cam = 0;
 			double dx_cam = 0, dy_cam = 0, dz_cam = 0;
-			double x_ref = 0, y_ref = 0, z_ref = 1.;
+			double x_ref = -0.3, y_ref = 0.2, z_ref = 1.;
 
 			double x_cam_measure = 0, y_cam_measure = 0, z_cam_measure = 0;
 			double dx_cam_measure = 0, dy_cam_measure = 0, dz_cam_measure = 0;
@@ -506,8 +506,8 @@ int main(int argc, char **argv)
 				*/
 			}
 
-			double H_xx = - (a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref) * 0;
-			double H_yy = - (a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref) * 0;
+			double H_xx = - (a_x+k_x)*dx_cam - a_x*k_x*(x_cam-x_ref);
+			double H_yy = - (a_y+k_y)*dy_cam - a_y*k_y*(y_cam-y_ref);
 			double H_zz = - (a_z+k_z)*dz_cam - a_z*k_z*(z_cam-z_ref) + g;
 
 			double phi_ref = 0, teta_ref = 0;
@@ -549,6 +549,7 @@ int main(int argc, char **argv)
 				_u2 += glob_remote_msg.point.y;
 				_u3 += glob_remote_msg.point.z;
 			}
+			/*
 			double ulim = 0.5; // model - 0.5, flight - 0.15;
 			double unorm = sqrt(_u2*_u2+_u3*_u3);	
 			if (unorm > ulim)
@@ -556,12 +557,13 @@ int main(int argc, char **argv)
 				_u2 *= ulim / unorm;
 				_u3 *= ulim / unorm;
 			}
+			
 
 			if (_u4 > ulim)
 				_u4 = ulim;
 			else if (_u4 < -ulim)
 				_u4 = -ulim;
-			
+			*/
 
 			_u2_kalman = _u2;
 			_u3_kalman = _u3;
