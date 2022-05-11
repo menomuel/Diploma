@@ -148,7 +148,7 @@ int main(int argc, char **argv)
 
 	ros::Rate loop_rate(200);
 
-	double m = 0.45; // [kg]
+	double m = 0.365; // [kg]
 	double g = 9.81; // [m/c^2]
 
 	double I_xx = 0.02; //0.0464; // [kg*m^2] or 0.01
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
 	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
 	double k_teta, a_teta, k_phi, a_phi, k_psi, a_psi;
-	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 16.0; // 5.0;
+	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 16.0; // 5.0; 
 	
 	double dt = 1./200;
 	double dt_fwd = 1./200; 
@@ -273,11 +273,9 @@ int main(int argc, char **argv)
 		double dt_filter = ros::Time::now().toSec() - t_prev;
 		t_prev = ros::Time::now().toSec();
 
-		//double dt_filter = dt; // FOR PYTHON CODE TESTING
-
-		bool modelOn = true;
+		bool modelOn = true; // false;
 		
-		if (imuUp && camXYZUp && camVelUp && camRPYUp && camRefUp) //  && camXYZUp && camVelUp && camRPYUp WITH CAMERA
+		if (imuUp && camRefUp) // && camXYZUp && camVelUp && camRPYUp) // WITH CAMERA
 		{
 			//ROS_INFO("ITERATION %d", count);
 			
@@ -428,7 +426,7 @@ int main(int argc, char **argv)
 
 			_Px = _F * _Px * _F.transpose() + _Q;
 
-			Eigen::Vector4d _Zx_k {_w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped}; // ZERO ANGLE
+			Eigen::Vector4d _Zx_k {_w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped};
 			Eigen::Vector4d _Yx_k = _Zx_k - _H * _Xx_k;
 
 			Eigen::Matrix4d _Sx_k = _H * _Px * _H.transpose() + _R;
@@ -531,8 +529,15 @@ int main(int argc, char **argv)
 			_u1 = glob_camRef_msg.quaternion.x; // ALTERNATIVE
 			//_u1 = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz); // with camera
 			//_u2 = I_xx * (-(a_phi+k_phi)*0 - a_phi*k_phi*(0.5)); // ESC test
+			
 			//_u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref)); // ZERO replaced _w_x_pred
 			//_u3 = I_yy * (-(a_teta+k_teta)*_w_y_pred - a_teta*k_teta*(_teta_pred-teta_ref)); // ZERO
+
+			//_u2 = I_xx * (-(a_phi+k_phi)*w_x_measure - a_phi*k_phi*(phi_measure-phi_ref));
+			//_u3 = I_yy * (-(a_teta+k_teta)*w_y_measure - a_teta*k_teta*(teta_measure-teta_ref));
+			
+			//_u2 = I_xx * (-(a_phi+k_phi)*w_x_pf - a_phi*k_phi*(phi_pf-phi_ref));
+			//_u3 = I_yy * (-(a_teta+k_teta)*w_y_pf - a_teta*k_teta*(teta_pf-teta_ref));
 			
 			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)); // ZERO replaced _w_x_pred
 			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)); // ZERO
@@ -542,7 +547,7 @@ int main(int argc, char **argv)
 			
 			if (_u1 > 8)
 				_u1 = 8;
-			
+
 			if (!modelOn)
 			{
 				_u1 = _u1 < glob_remote_msg.point.x ? _u1 : glob_remote_msg.point.x;
@@ -557,7 +562,6 @@ int main(int argc, char **argv)
 				_u2 *= ulim / unorm;
 				_u3 *= ulim / unorm;
 			}
-			
 
 			if (_u4 > ulim)
 				_u4 = ulim;

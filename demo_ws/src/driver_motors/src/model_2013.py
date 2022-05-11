@@ -8,7 +8,7 @@ from math import sin, cos, pi, sqrt
 from numpy import *
 
 
-M = 0.45     # kg
+M = 0.365     # kg
 #m_real = 0.5
 
 G = 9.81     # m/c^2
@@ -222,6 +222,7 @@ class Model:
 
         self.dot.phi += (self.u[1] - (Izz - Iyy) * self.dot.theta * self.dot.psi) / Ixx * dt
         self.dot.theta += (self.u[2] - (Ixx - Izz) * self.dot.phi * self.dot.psi) / Iyy * dt
+        #print(f'u3={self.u[2]} dot_theta={self.dot.theta}')
         self.dot.psi += self.u[3] / Izz * dt
         '''
        #Sasha's model
@@ -265,6 +266,10 @@ class Model:
         self.phi += self.dot.phi * dt
         self.theta += self.dot.theta * dt
         
+        
+        #print(f'MODEL.py dot_psi={self.dot.psi} dot_phi={self.dot.phi} dot_teta={self.dot.theta}')
+        #print(f'psi={self.psi} phi={self.phi} teta={self.theta}')
+
         # move
         self.dot.x += ((sin(self.psi) * sin(self.phi) + cos(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
         self.x += (self.dot.x) * dt

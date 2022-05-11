@@ -84,6 +84,19 @@ class ESC:
         for width in range(max_width, min_width, -step):
             self.pwm(width=width, sleep=sleep)
             #self.pwm_dutycycle(width=width, sleep=sleep)
+            
+    def motor_characteristic(self):
+        max_width = 1900
+        min_width = 1200
+        step = 25
+        
+        sleep = 0.
+
+        for width in range(min_width, max_width, step):
+            self.pwm(width, sleep)
+            input()
+            
+            #self.pwm_dutycycle(width=width, sleep=sleep)
 
     def u2_test(self):
         width12 = 1200
@@ -115,14 +128,12 @@ if __name__ == "__main__":
         esc.arm()
         #esc.test()
         
-        #esc.pwm(1200, 0)
-        
-        esc.pwm_single(esc.pin1, 1200, 0)
-        esc.pwm_single(esc.pin2, 1230, 0)
-        esc.pwm_single(esc.pin3, 1235, 0)
-        esc.pwm_single(esc.pin4, 1200, 0)
-        
-        time.sleep(10)
+        esc.motor_characteristic()
+        #esc.pwm_single(esc.pin1, 1200, 0)
+        #esc.pwm_single(esc.pin2, 1230, 0) #1230
+        #esc.pwm_single(esc.pin3, 1235, 0) #1235
+        #esc.pwm_single(esc.pin4, 1200, 0)
+        #time.sleep(10)
         
         #esc.u2_test()
         #esc.u3_test()

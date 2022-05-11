@@ -123,10 +123,11 @@ class Kalman:
 
 
                   # x     y    z   x_d   y_d  z_d 
+
         F = array([[1.,   0.,  0., delta_time,    0., 0.,  0., 0., 0., 0.,  0.,  0.],
                    [0.,   1.,  0., 0.,   delta_time,  0., 0.,  0., 0., 0.,  0.,  0.],
                    [0.,   0.,  1., 0.,   0.,  delta_time, 0.,  0., 0., 0.,  0.,  0.],
-                   [0.,   0.,  0., 1.,   0.,  0., u1/m*delta_time*(cos(psi)*sin(phi) - sin(psi)*cos(phi)*sin(theta)), u1/m*delta_time*(sin(psi)*cos(phi) - cos(psi)*sin(phi)*sin(theta)), u1/m*delta_time*(cos(psi)*cos(phi)*cos(theta)), 0., 0., 0.],   # initialize 2-d array
+                   [0.,   0.,  0., 1.,   0.,  0., u1/m*delta_time*(cos(psi)*sin(phi) - sin(psi)*cos(phi)*sin(theta)), u1/m*delta_time*(sin(psi)*cos(phi) - cos(psi)*sin(phi)*sin(theta)), u1/m*delta_time*(cos(psi)*cos(phi)*cos(theta)), 0., 0., 0.],
                    [0.,   0.,  0., 0.,   1.,  0., u1/m*delta_time*(sin(psi)*sin(phi) + cos(psi)*cos(phi)*sin(theta)), u1/m*delta_time*(-cos(psi)*cos(phi) - sin(psi)*sin(phi)*sin(theta)), u1/m*delta_time*sin(psi)*cos(phi)*cos(theta),  0., 0., 0.],
                    [0.,   0.,  0., 0.,   0.,  1., 0., u1/m*delta_time*(-sin(phi)*cos(theta)), u1/m*delta_time*(-cos(phi)*sin(theta)),  0., 0., 0.],
                    [0.,   0.,  0., 0.,   0.,  0., 1., 0., 0., delta_time, 0., 0.],
@@ -136,11 +137,37 @@ class Kalman:
                    [0.,   0.,  0., 0.,   0.,  0., 0., -k2_phi*delta_time*1., 0., 0., 1.-k1_phi*delta_time, 0.],
                    [0.,   0.,  0., 0.,   0.,  0., 0., 0., -k2_theta*delta_time*1., 0., 0., 1.-k1_theta*delta_time]
 ], dtype = double)
+        '''
+        # MY EXPERIMENT (FEDOT)
+        g = 9.81
+        F = array([[1.,   0.,  0., delta_time,    0., 0.,  0., 0., 0., 0.,  0.,  0.],
+                   [0.,   1.,  0., 0.,   delta_time,  0., 0.,  0., 0., 0.,  0.,  0.],
+                   [0.,   0.,  1., 0.,   0.,  delta_time, 0.,  0., 0., 0.,  0.,  0.],
+                   [0.,   0.,  0., 1.,   0.,  0., 0., 0., 0., 0., 0., 0.],
+                   [0.,   0.,  0., 0.,   1.,  0., 0., 0., 0.,  0., 0., 0.],
+                   [0.,   0.,  0., 0.,   0.,  1., 0., u1/m*delta_time*(-sin(phi)*cos(theta)), u1/m*delta_time*(-cos(phi)*sin(theta)),  0., 0., 0.],
+                   [0.,   0.,  0., 0.,   0.,  0., 1., 0., 0., delta_time, 0., 0.],
+                   [0.,   0.,  0., 0.,   0.,  0., 0., 1., 0., 0., delta_time, 0.],
+                   [0.,   0.,  0., 0.,   0.,  0., 0., 0., 1., 0., 0., delta_time],
+                   [0.,   0.,  0., 0.,   0.,  0., -k2_psi*delta_time*1., 0., 0., 1.-k1_psi*delta_time, 0., 0.],
+                   [0.,   0.,  0., 0.,   0.,  0., 0., -k2_phi*delta_time*1., 0., 0., 1.-k1_phi*delta_time, 0.],
+                   [0.,   0.,  0., 0.,   0.,  0., 0., 0., -k2_theta*delta_time*1., 0., 0., 1.-k1_theta*delta_time]
+], dtype = double)
 
-
-
-
-
+      Bu = array([[0.],
+                 [0.],
+                 [0.],
+                 [u1/m*delta_time*(sin(psi)*sin(phi) + cos(psi)*cos(phi)*sin(theta))],
+                 [u1/m*delta_time*(-cos(psi)*sin(phi) + sin(psi)*cos(phi)*sin(theta))],
+                 [u1/m*delta_time*cos(phi)*cos(theta) - g],
+                 [0.],
+                 [0.],
+                 [0.],
+                 [0.],
+                 [0.],
+                 [0.]
+], dtype = double)
+        '''
 
 #        H = array([[1.,   0.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],   # initialize 2-d array
 #                   [0.,   1.,  0., 0.,   0.,  0., 0.,  0., 0.,   0.,  0., 0.],
