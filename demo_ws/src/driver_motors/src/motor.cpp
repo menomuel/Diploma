@@ -320,7 +320,7 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	//controls_msg = msg;
 
 	double l = 0.12 * (sqrt(2)/2); // [m] * cos(pi/4)
-	double k = 0.05; //0.15;
+	double k = 0.03; //0.15;
 
 	// NORMAL AXES
 	Eigen::Matrix4d mat;
@@ -359,18 +359,18 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	//ROS_INFO_STREAM("Forces:\n" << F);
 
 	// pwm = coef * F + bias
-	double bias = 1194.1;
-	double bias1 = 1200;
-	double bias2 = 1230;
-	double bias3 = 1235;
-	double bias4 = 1200;
+	double bias = 1226; //1194.1;
+	//double bias1 = 1200;
+	//double bias2 = 1230;
+	//double bias3 = 1235;
+	//double bias4 = 1200;
 	
-	double coef = 157.5;
+	double coef = 159.4; // 157.5;
 
-	double pwm1 = F(0)*coef+bias1;
-	double pwm2 = F(1)*coef+bias2;
-	double pwm3 = F(2)*coef+bias3;
-	double pwm4 = F(3)*coef+bias4;
+	double pwm1 = F(0)*coef+bias;
+	double pwm2 = F(1)*coef+bias;
+	double pwm3 = F(2)*coef+bias;
+	double pwm4 = F(3)*coef+bias;
 
 	//ROS_INFO("PWM %f %f %f %f", pwm1, pwm2, pwm3, pwm4);
 

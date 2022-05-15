@@ -102,7 +102,7 @@ class Model {
 		geometry_msgs::QuaternionStamped glob_msg_control;
     
     public:
-		static constexpr double M = 0.365; // [kg]
+		static constexpr double M = 0.38; // [kg]
 		static constexpr double G = 9.81; // [m/s^2]
 	
 		static constexpr double I_xx = 0.02;
@@ -110,7 +110,7 @@ class Model {
 		static constexpr double I_zz = 0.02;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0., double _phi=0., double _teta=0., double _psi=0., double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0., double _phi=0.2, double _teta=-0.3, double _psi=0., double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{
@@ -163,8 +163,8 @@ class Model {
 				z += dot_z * dt;
 
 				// Calculate references
-				double m = 0.365; // [kg]
-				double g = 9.81; // [m/s^2]
+				double m = M; // [kg]
+				double g = G; // [m/s^2]
 
 				double x_ref = -0.3, y_ref = -0.3, z_ref = 1.;
 				double a_x, k_x, a_y, k_y, a_z, k_z;

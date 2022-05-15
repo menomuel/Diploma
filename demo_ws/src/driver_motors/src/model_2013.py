@@ -8,7 +8,7 @@ from math import sin, cos, pi, sqrt
 from numpy import *
 
 
-M = 0.365     # kg
+M = 0.39    # kg
 #m_real = 0.5
 
 G = 9.81     # m/c^2
@@ -227,31 +227,7 @@ class Model:
         '''
        #Sasha's model
 
-        # simple model for angles
-#        self.phi = self.u[1]
-#        self.theta = self.u[2]
-#        self.psi = self.u[3]
-
-#        if self.u[3]-self.psi_ref_prev > pi:
-#            self.psi_ref_summ -= 2*pi
-#        if self.u[3]-self.psi_ref_prev < -pi:
-#            self.psi_ref_summ += 2*pi
-
-#        self.psi_ref = self.psi_ref_summ + self.u[3]
         self.psi_ref = self.u[3]
-
-#        self.psi_ref_prev = self.u[3]
-#        self.psi_ref_prev = self.psi_ref
-
-
-# 2 degrees dinamical model for angles
-#        self.dot.phi += -self.k1_phi * (self.phi - self.phi_prev) - self.k2_phi * (self.phi - self.u[1]) * dt
-#        self.dot.theta += -self.k1_theta * (self.theta - self.theta_prev) - self.k2_theta * (self.theta - self.u[2]) * dt
-#        self.dot.psi += -self.k1_psi * (self.psi - self.psi_prev) - self.k2_psi * (self.psi - self.psi_ref) * dt
-
-#        self.dot.phi += (-self.k1_phi * self.dot.phi - self.k2_phi * (self.phi - self.u[1])) * dt
-#        self.dot.theta += (-self.k1_theta * self.dot.theta - self.k2_theta * (self.theta - self.u[2])) * dt
-#        self.dot.psi += (-self.k1_psi * self.dot.psi - self.k2_psi * (self.psi - self.psi_ref)) * dt
 
         self.dot.phi += (-self.k1_phi * self.dot.phi - self.k2_phi * self.phi + self.k_phi * self.u[1]) * dt
         self.dot.theta += (-self.k1_theta * self.dot.theta - self.k2_theta * self.theta + self.k_theta * self.u[2]) * dt
@@ -278,7 +254,7 @@ class Model:
         self.y += (self.dot.y) * dt
 
         R = 0.
-        if (self.z<0.22):
+        if (self.z<0.3):
             R = self.mass * G
 
         self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - self.mass * G + R) / self.mass * dt

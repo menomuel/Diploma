@@ -128,7 +128,8 @@ if __name__ == "__main__":
         esc.arm()
         #esc.test()
         
-        esc.motor_characteristic()
+        esc.pwm(1250, 1)
+        #esc.motor_characteristic()
         #esc.pwm_single(esc.pin1, 1200, 0)
         #esc.pwm_single(esc.pin2, 1230, 0) #1230
         #esc.pwm_single(esc.pin3, 1235, 0) #1235

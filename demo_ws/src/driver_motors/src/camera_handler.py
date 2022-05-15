@@ -20,7 +20,12 @@ glob_imu_msg = Imu()
 glob_rpy_msg = Vector3Stamped()
 glob_control_msg = QuaternionStamped()
 glob_pose_msg = PoseStamped()
+glob_remote_msg = PointStamped()
 
+
+def callbackRemote(msg):
+	global glob_remote_msg
+	glob_remote_msg = msg
 
 imuUp = False
 def callbackImu(msg):
@@ -50,9 +55,14 @@ def callbackPose(msg):
 camRawFile = open('CAM_raw.csv', 'w')
 camStFile = open('CAM_stepped.csv', 'w')
 camKalFile = open('CAM_kalman.csv', 'w')
+cam2degFile = open('CAM_2deg.csv', 'w')
+camRefFile = open('CAM_ref.csv', 'w')
+
 camRawData = []
 camStData = []
 camKalData = []
+cam2degData = []
+camRefData = []
 
 def dump_data():
 	for line in camRawData:
@@ -61,17 +71,24 @@ def dump_data():
 		camStFile.write(line)
 	for line in camKalData:
 		camKalFile.write(line)
+	for line in cam2degData:
+		cam2degFile.write(line)
+	for line in camRefData:
+		camRefFile.write(line)
 	camRawFile.close()
 	camStFile.close()
 	camKalFile.close()
+	cam2degFile.close()
+	camRefFile.close()
 
 def camera_handler():
 	global glob_imu_msg, glob_pose_msg
-	global camRawFile
+	#global camRawFile
 
 	rospy.init_node('camera_handler', anonymous=True)
 	rospy.on_shutdown(dump_data)
 
+	rospy.Subscriber("/remote", PointStamped, callbackRemote);
 	rospy.Subscriber("/imu/_data_stepped", Imu, callbackImu) # was data_mod
 	rospy.Subscriber("/imu/rpy/_stepped", Vector3Stamped, callbackRPY) # was predicted
 	rospy.Subscriber("/controls", QuaternionStamped, callbackControl)
@@ -113,7 +130,7 @@ def camera_handler():
 
 	control = [0.,0.,0.,0.]
 
-	delay1 = 16 # 12
+	delay1 = 12 # old model - 16
 	u1_q = Variable_With_Delay(delay=delay1)
 	u2_q = Variable_With_Delay(delay=delay1)
 	u3_q = Variable_With_Delay(delay=delay1)
@@ -173,18 +190,6 @@ def camera_handler():
 		psi_dot = glob_imu_msg.angular_velocity.z * 1
 		#rospy.loginfo("CAMERA_HANDLER.py dot_psi=%f dot_phi=%f dot_teta=%f", psi_dot, phi_dot, theta_dot)
 
-		control[0] = torque_ref # glob_control_msg.quaternion.x
-		control[1] = phi_ref # glob_control_msg.quaternion.y * 0 # now it's ref angle, not u!
-		control[2] = teta_ref # glob_control_msg.quaternion.z * 0 # now it's ref angle, not u!
-		control[3] = psi_ref # glob_control_msg.quaternion.w * 0 # now it's ref angle, not u!
-		
-		# ALT For my model
-		#control[0] = glob_control_msg.quaternion.x
-		#control[1] = glob_control_msg.quaternion.y
-		#control[2] = glob_control_msg.quaternion.z
-		#control[3] = glob_control_msg.quaternion.w
-
-
 		# SECOND DEGREE
 		d_dxy = 1.
 		tau_dxy = 0.05 # 0.1
@@ -199,17 +204,19 @@ def camera_handler():
 		y_cam2 += y_cam_dot2 * dt
 		z_cam_dot2 += (-k1_dxy * z_cam_dot2 - k2_dxy * z_cam2 + k_dxy * z_cam) * dt
 		z_cam2 += z_cam_dot2 * dt
+		
+		cam2degData.append(f'{rospy.get_time()}, {x_cam2}, {y_cam2}, {z_cam2}, {x_cam_dot2}, {y_cam_dot2}, {z_cam_dot2}\n')
 
 		#rospy.loginfo("x_cam=%f x_cam_dot=%f", x_cam, x_cam_dot);
 		#rospy.loginfo("u1=%f u2=%f u3=%f u4=%f", control[0], control[1], control[2], control[3])
 
 		
 		x_current = array([x_cam, y_cam, z_cam, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
-		
 		#x_current = array([x_cam, y_cam, z_cam, x_cam_dot2, y_cam_dot2, z_cam_dot2, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
+		
 		model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
-		#model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
 		model_ref.dot.x, model_ref.dot.y, model_ref.dot.z = model.dot.x, model.dot.y, model.dot.z
+		#model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
 		
 		n = 0
 		while n < delay1: # delay additional steps
@@ -224,25 +231,21 @@ def camera_handler():
 		x_prediction = array([model.x, model.y, model.z, model.dot.x, model.dot.y, model.dot.z, model.psi, model.phi, model.theta, model.dot.psi, model.dot.phi, model.dot.theta], dtype = double)
 
 		x_estimated[:] = x_prediction[:]
+		
 		x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(9,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
 		#x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(12,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
-		
-		u1_q.value = control[0]
-		u2_q.value = control[1]
-		u3_q.value = control[2]
-		u4_q.value = control[3]
-		 
+				 
 		#rospy.loginfo("\nx=%f \ny=%f \nz=%f", x_estimated[0], x_estimated[1], x_estimated[2]);
 		camKalData.append(f'{rospy.get_time()}, {x_estimated[0]}, {x_estimated[1]}, {x_estimated[2]}, {x_estimated[3]}, {x_estimated[4]}, {x_estimated[5]}\n')
 
 		# Reference
-		M = 0.365
+		M = 0.39
 		g = 9.81
 
-		x_ref = -0.05
-		y_ref = 0.2
+		x_ref = 0 # -0.05
+		y_ref = 0 # 0.2
 		z_ref = 1.
-		a_x = k_x = a_y = k_y = a_z = k_z = 4.
+		a_x = k_x = a_y = k_y = a_z = k_z = 1. # 4.
 
 		H_xx = - (a_x+k_x)*x_estimated[3] - a_x*k_x*(x_estimated[0]-x_ref)
 		H_yy = - (a_y+k_y)*x_estimated[4] - a_y*k_y*(x_estimated[1]-y_ref)
@@ -251,20 +254,38 @@ def camera_handler():
 		#rospy.loginfo("x=%f y=%f z=%f dot_x=%f dot_y=%f dot_z=%f", x_estimated[0], x_estimated[1], x_estimated[2], x_estimated[3], x_estimated[4], x_estimated[5])
 
 		if controlUp:
-			#rospy.loginfo("CONTROLS UP")
 			#torque_ref = M * sqrt(H_zz*H_zz)
 			torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
-			teta_ref = arctan(H_xx / H_zz) * 1
-			phi_ref = arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz)) * 1
+			phi_ref = arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
+			teta_ref = arctan(H_xx / H_zz)
 			psi_ref = 0
-
-			count += 1
-			if count == 10:
-				count = 0
+			#count += 1
+			#if count == 10:
+				#count = 0
 				#rospy.loginfo("H_xx=%f H_yy=%f H_zz=%f", H_xx, H_yy, H_zz)
 				#rospy.loginfo("teta_ref=%f\n", teta_ref)
 
+		# Limits
+		if torque_ref > glob_remote_msg.point.x:
+			torque_ref = glob_remote_msg.point.x
+		
+		if torque_ref > 8:
+			torque_ref = 8
+			
+		camRefData.append(f'{rospy.get_time()}, {torque_ref}, {phi_ref}, {teta_ref}, {psi_ref}, {H_xx}, {H_zz}, {H_xx / H_zz}\n')
+
 		# Model step
+		control[0] = torque_ref # glob_control_msg.quaternion.x
+		control[1] = phi_ref # glob_control_msg.quaternion.y * 0 # now it's ref angle, not u!
+		control[2] = teta_ref # glob_control_msg.quaternion.z * 0 # now it's ref angle, not u!
+		control[3] = psi_ref # glob_control_msg.quaternion.w * 0 # now it's ref angle, not u!
+		u1_q.value = control[0]
+		u2_q.value = control[1]
+		u3_q.value = control[2]
+		u4_q.value = control[3]
+		
+		#rospy.loginfo("u1=%f", torque_ref)
+		
 		model.x, model.y, model.z, model.dot.x, model.dot.y, model.dot.z, model.psi, model.phi, model.theta, model.dot.psi, model.dot.phi, model.dot.theta = x_estimated
 		model.set_control(control)
 		model.step(dt)
