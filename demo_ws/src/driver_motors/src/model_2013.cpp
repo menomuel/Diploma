@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <signal.h>
+#include <deque>
 
 class Model {
     
@@ -102,15 +103,15 @@ class Model {
 		geometry_msgs::QuaternionStamped glob_msg_control;
     
     public:
-		static constexpr double M = 0.38; // [kg]
+		static constexpr double M = 0.39; // [kg]
 		static constexpr double G = 9.81; // [m/s^2]
 	
-		static constexpr double I_xx = 0.02;
-		static constexpr double I_yy = 0.02;
-		static constexpr double I_zz = 0.02;
+		static constexpr double I_xx = 0.0075;
+		static constexpr double I_yy = 0.0075;
+		static constexpr double I_zz = 0.0075;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0., double _phi=0.2, double _teta=-0.3, double _psi=0., double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0., double _phi=0., double _teta=0., double _psi=0., double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{
@@ -212,55 +213,55 @@ class Model {
 			pubImu.publish(msg_imu);
 
 			++counter;
-			if (counter == 15) // 300/15=20hz //if (true)
+			 if (counter == 15) // 300/15=20hz //if (true)
 			{
-			counter = 0;
+				counter = 0;
 
-			// CAMERA MESSAGE
-			geometry_msgs::QuaternionStamped msg_ref;
-			msg_ref.header.stamp = ros::Time::now();
-			msg_ref.quaternion.x = torque_ref;
-			msg_ref.quaternion.y = phi_ref;
-			msg_ref.quaternion.z = teta_ref;
-			msg_ref.quaternion.w = psi_ref;
+				// CAMERA MESSAGE
+				geometry_msgs::QuaternionStamped msg_ref;
+				msg_ref.header.stamp = ros::Time::now();
+				msg_ref.quaternion.x = torque_ref;
+				msg_ref.quaternion.y = phi_ref;
+				msg_ref.quaternion.z = teta_ref;
+				msg_ref.quaternion.w = psi_ref;
 
-			geometry_msgs::PoseStamped msg_pose;
-			msg_pose.header.stamp = ros::Time::now();
-			msg_pose.pose.position.x = x;
-			msg_pose.pose.position.y = y;
-			msg_pose.pose.position.z = z;
-			msg_pose.pose.orientation.x = quat.getX();
-			msg_pose.pose.orientation.y = quat.getY();
-			msg_pose.pose.orientation.z = quat.getZ();
-			msg_pose.pose.orientation.w = quat.getW();
-			//tf::Matrix3x3 m(quat);
-			//double roll, pitch, yaw;
-			//m.getRPY(roll, pitch, yaw);
-			//ROS_INFO("%f %f %f %f angles (%f,%f,%f)", quat.getX(), quat.getY(), quat.getZ(), quat.getW(), roll, pitch, yaw);
+				geometry_msgs::PoseStamped msg_pose;
+				msg_pose.header.stamp = ros::Time::now();
+				msg_pose.pose.position.x = x;
+				msg_pose.pose.position.y = y;
+				msg_pose.pose.position.z = z;
+				msg_pose.pose.orientation.x = quat.getX();
+				msg_pose.pose.orientation.y = quat.getY();
+				msg_pose.pose.orientation.z = quat.getZ();
+				msg_pose.pose.orientation.w = quat.getW();
+				//tf::Matrix3x3 m(quat);
+				//double roll, pitch, yaw;
+				//m.getRPY(roll, pitch, yaw);
+				//ROS_INFO("%f %f %f %f angles (%f,%f,%f)", quat.getX(), quat.getY(), quat.getZ(), quat.getW(), roll, pitch, yaw);
 
-			geometry_msgs::Vector3Stamped msg_xyz;
-			msg_xyz.header.stamp = ros::Time::now();
-			msg_xyz.vector.x = x;
-			msg_xyz.vector.y = y;
-			msg_xyz.vector.z = z;
+				geometry_msgs::Vector3Stamped msg_xyz;
+				msg_xyz.header.stamp = ros::Time::now();
+				msg_xyz.vector.x = x;
+				msg_xyz.vector.y = y;
+				msg_xyz.vector.z = z;
 
-			geometry_msgs::Vector3Stamped msg_vel;
-			msg_vel.header.stamp = ros::Time::now();
-			msg_vel.vector.x = dot_x;
-			msg_vel.vector.y = dot_y;
-			msg_vel.vector.z = dot_z;
+				geometry_msgs::Vector3Stamped msg_vel;
+				msg_vel.header.stamp = ros::Time::now();
+				msg_vel.vector.x = dot_x;
+				msg_vel.vector.y = dot_y;
+				msg_vel.vector.z = dot_z;
 
-			geometry_msgs::Vector3Stamped msg_rpy;
-			msg_rpy.header.stamp = ros::Time::now();
-			msg_rpy.vector.x = phi;
-			msg_rpy.vector.y = teta;
-			msg_rpy.vector.z = psi;
+				geometry_msgs::Vector3Stamped msg_rpy;
+				msg_rpy.header.stamp = ros::Time::now();
+				msg_rpy.vector.x = phi;
+				msg_rpy.vector.y = teta;
+				msg_rpy.vector.z = psi;
 
-			//pubRef.publish(msg_ref);
-			//pubXYZ.publish(msg_xyz);
-			//pubVel.publish(msg_vel);
-			//pubRPY.publish(msg_rpy);
-			pubPose.publish(msg_pose);
+				//pubRef.publish(msg_ref);
+				//pubXYZ.publish(msg_xyz);
+				//pubVel.publish(msg_vel);
+				//pubRPY.publish(msg_rpy);
+				pubPose.publish(msg_pose);
 			}
 		}
 		

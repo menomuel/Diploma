@@ -13,9 +13,9 @@ M = 0.39    # kg
 
 G = 9.81     # m/c^2
 MG = M * G
-Ixx = 0.02
-Iyy = 0.02
-Izz = 0.02
+Ixx = 0.0075 # 0.02
+Iyy = 0.0075 # 0.02
+Izz = 0.0075 # 0.02
 
 delay1 = 0
 delay = 0
@@ -226,17 +226,26 @@ class Model:
         self.dot.psi += self.u[3] / Izz * dt
         '''
        #Sasha's model
-
+       
+        # I_xx * dot_phi = u (1)
+        # u = I_xx * [ - (a_phi + k_phi) * dot_phi - a_phi * k_phi * (phi - phi_ref)) (2)
+        # dot_phi = u / I_xx = - (a_phi + k_phi) * dot_phi - a_phi * k_phi * (phi - phi_ref)
+        
+        k_phi = a_phi = k_theta = a_theta = k_psi = a_psi = 10.
+       
+        self.dot.phi += (- (a_phi + k_phi) * self.dot.phi - (a_phi * k_phi) * (self.phi - self.u[1])) * dt
+        self.dot.theta += (- (a_theta + k_theta) * self.dot.theta - (a_theta * k_theta) * (self.theta - self.u[2])) * dt
+        self.dot.psi += (- (a_psi + k_psi) * self.dot.psi - (a_psi * k_psi) * (self.psi - self.u[3])) * dt
+        '''
         self.psi_ref = self.u[3]
-
         self.dot.phi += (-self.k1_phi * self.dot.phi - self.k2_phi * self.phi + self.k_phi * self.u[1]) * dt
         self.dot.theta += (-self.k1_theta * self.dot.theta - self.k2_theta * self.theta + self.k_theta * self.u[2]) * dt
         self.dot.psi += (-self.k1_psi * self.dot.psi - self.k2_psi * self.psi + self.k_psi * self.psi_ref) * dt
-#        self.dot.psi += (-self.k1_psi * self.dot.psi - self.k2_psi * angle_to_pi(self.psi - self.psi_ref)) * dt # hotim ne nakaplivat ugol psi, nado chtobi proisvodnaya ne skakala
 
         self.psi_prev = self.psi
         self.phi_prev = self.phi
         self.theta_prev = self.theta
+        '''
 
         self.psi += self.dot.psi * dt
         self.phi += self.dot.phi * dt

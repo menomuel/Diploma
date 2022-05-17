@@ -151,15 +151,15 @@ int main(int argc, char **argv)
 	double m = 0.39; // [kg]
 	double g = 9.81; // [m/c^2]
 
-	double I_xx = 0.02; //0.0464; // [kg*m^2] or 0.01
-	double I_yy = 0.02; //0.0464; // [kg*m^2] or 0.01
-	double I_zz = 0.02;
+	double I_xx = 0.0075; //0.0464; // [kg*m^2] or 0.01
+	double I_yy = 0.0075; //0.0464; // [kg*m^2] or 0.01
+	double I_zz = 0.0075;
 
 	double k_x, a_x, k_y, a_y, k_z, a_z;
 	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
 	double k_teta, a_teta, k_phi, a_phi, k_psi, a_psi;
-	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 16.0; // flight - 5.0, model - 16.0; 
+	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 10.0; // flight - 5.0, model - 16.0; 
 	
 	double dt = 1./200;
 	double dt_fwd = 1./200; 
@@ -169,7 +169,7 @@ int main(int argc, char **argv)
 	ROS_INFO("New steps equal to %d", _N);
 	
 	double t_prev = ros::Time::now().toSec();
-	double T = 0.05; // [s], filter param
+	double T = 0.15; // [s], filter param
 	double k_f = 1. / T;
 	
 	// PYTHON
@@ -207,15 +207,15 @@ int main(int argc, char **argv)
 	
 	Eigen::Matrix4d _Q;
 	_Q << param_qw, 0, 0, 0, 
-			  0, param_qw, 0, 0,
+			  0, param_qw/10, 0, 0,
 			  0, 0, param_qa, 0,
-			  0, 0, 0, param_qa;
+			  0, 0, 0, param_qa/10;
 	
 	Eigen::Matrix4d _R;
 	_R << param_rw, 0, 0, 0, 
-			  0, param_rw, 0, 0,
-			  0, 0, param_ra, 0,
-			  0, 0, 0, param_ra;
+			  0, param_rw/10, 0, 0,
+			  0, 0, param_ra*10, 0,
+			  0, 0, 0, param_ra/10*10;
 	
 	const double _p = 0.1; 
 	Eigen::Matrix4d _Px;
@@ -275,9 +275,9 @@ int main(int argc, char **argv)
 		double dt_filter = ros::Time::now().toSec() - t_prev;
 		t_prev = ros::Time::now().toSec();
 
-		bool modelOn = true; // true;
+		bool modelOn = false; // true;
 		
-		if (imuUp) // && camRefUp) // && camXYZUp && camVelUp && camRPYUp) // WITH CAMERA
+		if (imuUp && camRefUp) // && camXYZUp && camVelUp && camRPYUp) // WITH CAMERA
 		{
 			double acc_x_offset = 0; 
 			double acc_y_offset = 0;
@@ -297,11 +297,11 @@ int main(int argc, char **argv)
 			std::mt19937 gen{rd()};
 			std::normal_distribution<> d_w{0,0.05};
 			std::normal_distribution<> d_a{0,0.01};
-			w_x += d_w(gen);
-			w_y += d_w(gen);
+			//w_x += d_w(gen);
+			//w_y += d_w(gen);
 			//w_z += d_w(gen);
-			phi += d_a(gen);
-			teta += d_a(gen);
+			//phi += d_a(gen);
+			//teta += d_a(gen);
 			//psi += d_a(gen);
 			
 
@@ -321,7 +321,8 @@ int main(int argc, char **argv)
 			phi_measure = phi;
 			teta_measure = teta;
 			psi_measure = psi;
-			
+			//if (modelOn)
+			//	dr_file << glob_angleVel_msg.header.stamp << "," << w_x << "," << w_y << "," << w_z << "," << phi << "," << teta << "," << psi << "\n";
 
 			// DELAY	
 			/*
@@ -379,6 +380,7 @@ int main(int argc, char **argv)
 				teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
 			}
 			
+			
 			dr_file << glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << w_z_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure << "\n";
 			//ROS_INFO_STREAM(glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure);
 			dpf_file << ros::Time::now() << "," << w_x_pf << "," << w_y_pf << "," << w_z_pf << "," << phi_pf << "," << teta_pf << "," << psi_pf << "\n";
@@ -410,16 +412,24 @@ int main(int argc, char **argv)
 				_w_y_pf_stepped += - k_f * _w_y_pf_stepped * dt + k_f * _w_y_stepped * dt;
 				_teta_pf_stepped += - k_f * _teta_pf_stepped * dt + k_f * _teta_stepped * dt;
 
-				_psi_stepped += _w_z_stepped * dt_fwd;
+				//_psi_stepped += _w_z_stepped * dt_fwd;
 				_w_z_stepped += (_u4_kalman_q[i] / I_zz) * dt_fwd;
 			}
 			
-			_dst_file << ros::Time::now() << "," << _w_x_stepped << "," << _w_y_stepped << "," << _w_z_stepped << "," << _phi_stepped << "," << _teta_stepped << "," << _psi_stepped << "," << "\n";
+			_dst_file << ros::Time::now() << "," << _w_x_stepped << "," << _w_y_stepped << "," << _w_z_stepped << "," << _phi_stepped << "," << _teta_stepped << "," << _psi_stepped
+			 << "," << _w_x_pf_stepped << "," << _w_y_pf_stepped << "," << _phi_pf_stepped << "," << _teta_pf_stepped << "\n";
 			
 			// KALMAN FILTER-4
 			/// x-axis
 			Eigen::Vector4d _Xx_k_prev {_w_x_pred, _w_x_pf_pred, _phi_pred, _phi_pf_pred};
 			Eigen::Vector4d _Xx_k = _F * _Xx_k_prev + _Bx * _u2_kalman;
+			/*
+			Eigen::Vector4d _Xx_k = _Xx_k_prev;
+			for (int i = 0; i < _N; ++i)
+			{
+				_Xx_k = _F * _Xx_k + _Bx * _u2_kalman_q[i];
+			}
+			*/
 
 			_Px = _F * _Px * _F.transpose() + _Q;
 
@@ -458,7 +468,7 @@ int main(int argc, char **argv)
 			_teta_pf_pred = _Xy_k(3);
 			_dm_file << ros::Time::now() << "," << _w_x_pred << "," << _w_y_pred << "," << 0  << "," << _phi_pred << "," << _teta_pred << "," << 0 << "," << _w_x_pf_pred  << "," << _w_y_pf_pred << "," << 0 << "\n";
 			
-			double phi_ref = 0, teta_ref = 0;
+			double phi_ref = 0, teta_ref = 0, psi_ref = 0;
 			// CAMERA
 			/*
 			double x_cam = 0, y_cam = 0, z_cam = 0;
@@ -520,12 +530,13 @@ int main(int argc, char **argv)
 			// CONTROLS
 			//phi_ref = 0; // no camera
 			//teta_ref = 0; // no camera
-			phi_ref = 0.; // glob_camRef_msg.quaternion.y;
-			teta_ref = 0.; //  glob_camRef_msg.quaternion.z;
+			phi_ref = glob_camRef_msg.quaternion.y;
+			teta_ref = glob_camRef_msg.quaternion.z;
+			psi_ref = glob_camRef_msg.quaternion.w;
 
-			_u1 = m * g; // no camera
+			//_u1 = m * g; // no camera
 			//_u1 = m * sqrt(H_zz*H_zz); // only z-axis
-			//_u1 = glob_camRef_msg.quaternion.x; // ALTERNATIVE
+			_u1 = glob_camRef_msg.quaternion.x; // ALTERNATIVE
 			//_u1 = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz); // with camera
 			//_u2 = I_xx * (-(a_phi+k_phi)*0 - a_phi*k_phi*(0.5)); // ESC test
 			
@@ -540,12 +551,14 @@ int main(int argc, char **argv)
 			
 			//_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)); // ZERO replaced _w_x_pred
 			//_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)); // ZERO
-			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*_psi_stepped) * 0;
+			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*(_psi_stepped - psi_ref));
 			
 			// LIMITS
 			
+			/*
 			if (_u1 > 8)
 				_u1 = 8;
+			*/
 
 			if (!modelOn)
 			{
@@ -554,6 +567,7 @@ int main(int argc, char **argv)
 				_u3 += glob_remote_msg.point.z;
 			}
 			
+			
 			double ulim = 0.2; // model - 0.5, flight - 0.15;
 			double unorm = sqrt(_u2*_u2+_u3*_u3);	
 			if (unorm > ulim)
@@ -561,12 +575,12 @@ int main(int argc, char **argv)
 				_u2 *= ulim / unorm;
 				_u3 *= ulim / unorm;
 			}
-
 			
-			if (_u4 > ulim * 10)
-				_u4 = ulim * 10;
-			else if (_u4 < -ulim * 10)
-				_u4 = -ulim * 10;
+			
+			if (_u4 > ulim)
+				_u4 = ulim;
+			else if (_u4 < -ulim)
+				_u4 = -ulim;
 			
 
 			_u2_kalman = _u2;
@@ -618,13 +632,13 @@ int main(int argc, char **argv)
 			_msg_mod.header.stamp = ros::Time::now();
 			_msg_mod.angular_velocity.x = _w_x_pred;
 			_msg_mod.angular_velocity.y = _w_y_pred;
-			_msg_mod.angular_velocity.z = 0;
+			_msg_mod.angular_velocity.z = _w_z_stepped; // stepped!
 			
 			geometry_msgs::Vector3Stamped _msg_rpy_pred;
 			_msg_rpy_pred.header.stamp = ros::Time::now();
 			_msg_rpy_pred.vector.x = _phi_pred;
 			_msg_rpy_pred.vector.y = _teta_pred;
-			_msg_rpy_pred.vector.z = 0;
+			_msg_rpy_pred.vector.z = _psi_stepped; // stepped
 			
 			// PUBLISHERS			
 			chatter_pub.publish(msg);

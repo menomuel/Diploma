@@ -320,7 +320,7 @@ void controlsCallback(const geometry_msgs::QuaternionStamped& msg)
 	//controls_msg = msg;
 
 	double l = 0.12 * (sqrt(2)/2); // [m] * cos(pi/4)
-	double k = 0.03; //0.15;
+	double k = 0.15;
 
 	// NORMAL AXES
 	Eigen::Matrix4d mat;

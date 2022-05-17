@@ -89,8 +89,8 @@ def camera_handler():
 	rospy.on_shutdown(dump_data)
 
 	rospy.Subscriber("/remote", PointStamped, callbackRemote);
-	rospy.Subscriber("/imu/_data_stepped", Imu, callbackImu) # was data_mod
-	rospy.Subscriber("/imu/rpy/_stepped", Vector3Stamped, callbackRPY) # was predicted
+	rospy.Subscriber("/imu/_data_mod", Imu, callbackImu) # stepped / was data_mod
+	rospy.Subscriber("/imu/rpy/_predicted", Vector3Stamped, callbackRPY) # stepped / was predicted
 	rospy.Subscriber("/controls", QuaternionStamped, callbackControl)
 	rospy.Subscriber("/mavros/vision_pose/pose", PoseStamped, callbackPose)
 
@@ -130,7 +130,7 @@ def camera_handler():
 
 	control = [0.,0.,0.,0.]
 
-	delay1 = 12 # old model - 16
+	delay1 = 15 # 12 # old model - 16
 	u1_q = Variable_With_Delay(delay=delay1)
 	u2_q = Variable_With_Delay(delay=delay1)
 	u3_q = Variable_With_Delay(delay=delay1)
@@ -159,6 +159,9 @@ def camera_handler():
 	psi_ref = 0
 
 	count = 0
+	
+	timelim = 5 # [s]
+	timestart = rospy.get_time()
 
 	while not rospy.is_shutdown():
 		dt = rospy.get_time() - time_prev
@@ -207,7 +210,7 @@ def camera_handler():
 		
 		cam2degData.append(f'{rospy.get_time()}, {x_cam2}, {y_cam2}, {z_cam2}, {x_cam_dot2}, {y_cam_dot2}, {z_cam_dot2}\n')
 
-		#rospy.loginfo("x_cam=%f x_cam_dot=%f", x_cam, x_cam_dot);
+		#rospy.loginfo("z_cam=%f z_cam_dot=%f", z_cam, vz_cam);
 		#rospy.loginfo("u1=%f u2=%f u3=%f u4=%f", control[0], control[1], control[2], control[3])
 
 		
@@ -242,14 +245,24 @@ def camera_handler():
 		M = 0.39
 		g = 9.81
 
-		x_ref = 0 # -0.05
-		y_ref = 0 # 0.2
-		z_ref = 1.
-		a_x = k_x = a_y = k_y = a_z = k_z = 1. # 4.
+		if (rospy.get_time() - timestart) > timelim:
+			x_ref = 0. # -0.05
+			y_ref = -0.2
+			z_ref = 0.8
+		else:
+			x_ref = 0. # -0.05
+			y_ref = -0.2
+			z_ref = 0.8
+		
+		a_x = k_x = a_y = k_y = a_z = k_z = 4. # 1.
 
 		H_xx = - (a_x+k_x)*x_estimated[3] - a_x*k_x*(x_estimated[0]-x_ref)
 		H_yy = - (a_y+k_y)*x_estimated[4] - a_y*k_y*(x_estimated[1]-y_ref)
 		H_zz = - (a_z+k_z)*x_estimated[5] - a_z*k_z*(x_estimated[2]-z_ref) + g
+		# From model
+		#H_xx = - (a_x+k_x)*model_ref.dot.x - a_x*k_x*(model_ref.x-x_ref)
+		#H_yy = - (a_y+k_y)*model_ref.dot.y - a_y*k_y*(model_ref.y-y_ref)
+		#H_zz = - (a_z+k_z)*model_ref.dot.z - a_z*k_z*(model_ref.z-z_ref) + g
 		
 		#rospy.loginfo("x=%f y=%f z=%f dot_x=%f dot_y=%f dot_z=%f", x_estimated[0], x_estimated[1], x_estimated[2], x_estimated[3], x_estimated[4], x_estimated[5])
 
@@ -257,7 +270,7 @@ def camera_handler():
 			#torque_ref = M * sqrt(H_zz*H_zz)
 			torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
 			phi_ref = arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
-			teta_ref = arctan(H_xx / H_zz)
+			teta_ref = 0 * arctan(H_xx / H_zz)
 			psi_ref = 0
 			#count += 1
 			#if count == 10:
@@ -266,8 +279,20 @@ def camera_handler():
 				#rospy.loginfo("teta_ref=%f\n", teta_ref)
 
 		# Limits
-		if torque_ref > glob_remote_msg.point.x:
-			torque_ref = glob_remote_msg.point.x
+		modelOn = False
+		if not modelOn:
+			if torque_ref > glob_remote_msg.point.x:
+				torque_ref = glob_remote_msg.point.x
+		
+		if (phi_ref > 0.3):
+			phi_ref = 0.3
+		elif (phi_ref < -0.3):
+			phi_ref = -0.3
+			
+		if (teta_ref > 0.3):
+			teta_ref = 0.3
+		elif (teta_ref < -0.3):
+			teta_ref = -0.3
 		
 		if torque_ref > 8:
 			torque_ref = 8
