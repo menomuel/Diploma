@@ -57,12 +57,14 @@ camStFile = open('CAM_stepped.csv', 'w')
 camKalFile = open('CAM_kalman.csv', 'w')
 cam2degFile = open('CAM_2deg.csv', 'w')
 camRefFile = open('CAM_ref.csv', 'w')
+camRPYRoughFile = open('CAM_rpy_rough.csv', 'w')
 
 camRawData = []
 camStData = []
 camKalData = []
 cam2degData = []
 camRefData = []
+camRPYRoughData = []
 
 def dump_data():
 	for line in camRawData:
@@ -75,11 +77,14 @@ def dump_data():
 		cam2degFile.write(line)
 	for line in camRefData:
 		camRefFile.write(line)
+	for line in camRPYRoughData:
+		camRPYRoughFile.write(line)
 	camRawFile.close()
 	camStFile.close()
 	camKalFile.close()
 	cam2degFile.close()
 	camRefFile.close()
+	camRPYRoughFile.close()
 
 def camera_handler():
 	global glob_imu_msg, glob_pose_msg
@@ -130,7 +135,7 @@ def camera_handler():
 
 	control = [0.,0.,0.,0.]
 
-	delay1 = 15 # 12 # old model - 16
+	delay1 = 10 # 12 # old model - 16
 	u1_q = Variable_With_Delay(delay=delay1)
 	u2_q = Variable_With_Delay(delay=delay1)
 	u3_q = Variable_With_Delay(delay=delay1)
@@ -160,7 +165,6 @@ def camera_handler():
 
 	count = 0
 	
-	timelim = 5 # [s]
 	timestart = rospy.get_time()
 
 	while not rospy.is_shutdown():
@@ -187,6 +191,8 @@ def camera_handler():
 		theta = glob_rpy_msg.vector.y * 1 # from controller
 		psi = euler[2] * 1 # from camera
 		#rospy.loginfo("psi %f", euler[2])
+		
+		camRPYRoughData.append(f'{rospy.get_time()}, {euler[0]}, {euler[1]}, {euler[2]}\n')
 
 		phi_dot = glob_imu_msg.angular_velocity.x * 1
 		theta_dot = glob_imu_msg.angular_velocity.y * 1
@@ -242,21 +248,34 @@ def camera_handler():
 		camKalData.append(f'{rospy.get_time()}, {x_estimated[0]}, {x_estimated[1]}, {x_estimated[2]}, {x_estimated[3]}, {x_estimated[4]}, {x_estimated[5]}\n')
 
 		# Reference
-		M = 0.39
+		M = 0.43
 		g = 9.81
 
+		'''
+		timelim = 20 # [s]
+		if (rospy.get_time() - timestart) < timelim:
+			x_ref = 0.
+			y_ref = 0.
+			z_ref = 1.2
+
 		if (rospy.get_time() - timestart) > timelim:
-			x_ref = 0. # -0.05
-			y_ref = -0.2
-			z_ref = 0.8
-		else:
-			x_ref = 0. # -0.05
-			y_ref = -0.2
-			z_ref = 0.8
+			x_ref = 0.
+			y_ref = 0.
+			z_ref = 1.2
+				
+		if (rospy.get_time() - timestart) > 2*timelim:
+			x_ref = 0.
+			y_ref = 0.
+			z_ref = 1.2
+		'''
+		x_ref = -0.5
+		y_ref = 0.
+		z_ref = 1.2
+		
 		
 		a_x = k_x = a_y = k_y = a_z = k_z = 4. # 1.
 
-		H_xx = - (a_x+k_x)*x_estimated[3] - a_x*k_x*(x_estimated[0]-x_ref)
+		H_xx = - (a_x+k_x)*x_estimated[3] - a_x*k_x*(x_estimated[0]-x_ref) # ZERO VEL
 		H_yy = - (a_y+k_y)*x_estimated[4] - a_y*k_y*(x_estimated[1]-y_ref)
 		H_zz = - (a_z+k_z)*x_estimated[5] - a_z*k_z*(x_estimated[2]-z_ref) + g
 		# From model
@@ -267,10 +286,14 @@ def camera_handler():
 		#rospy.loginfo("x=%f y=%f z=%f dot_x=%f dot_y=%f dot_z=%f", x_estimated[0], x_estimated[1], x_estimated[2], x_estimated[3], x_estimated[4], x_estimated[5])
 
 		if controlUp:
-			#torque_ref = M * sqrt(H_zz*H_zz)
-			torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
-			phi_ref = arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
+			torque_ref = M * sqrt(H_zz*H_zz)
+			#torque_ref = M * sqrt(H_zz*H_zz + H_xx*H_xx)
+			
+			#torque_ref = M * g
+			#torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
+			phi_ref = 0 * arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
 			teta_ref = 0 * arctan(H_xx / H_zz)
+				
 			psi_ref = 0
 			#count += 1
 			#if count == 10:
@@ -297,7 +320,7 @@ def camera_handler():
 		if torque_ref > 8:
 			torque_ref = 8
 			
-		camRefData.append(f'{rospy.get_time()}, {torque_ref}, {phi_ref}, {teta_ref}, {psi_ref}, {H_xx}, {H_zz}, {H_xx / H_zz}\n')
+		camRefData.append(f'{rospy.get_time()}, {torque_ref}, {phi_ref}, {teta_ref}, {psi_ref}, {x_ref}, {y_ref}, {z_ref}\n')
 
 		# Model step
 		control[0] = torque_ref # glob_control_msg.quaternion.x
@@ -385,11 +408,6 @@ def camera_handler():
 		pubRPYRough.publish(msg_rpy_rough)
 		
 		rate.sleep()
-
-	#camRawFile.close()
-	#camStFile.close()
-	#camKalFile.close()
-	#cam2degFile.close()
 
 if __name__ == '__main__':
 	try:

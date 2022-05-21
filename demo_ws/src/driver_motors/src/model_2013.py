@@ -8,14 +8,14 @@ from math import sin, cos, pi, sqrt
 from numpy import *
 
 
-M = 0.39    # kg
+M = 0.43    # kg
 #m_real = 0.5
 
 G = 9.81     # m/c^2
 MG = M * G
-Ixx = 0.0075 # 0.02
-Iyy = 0.0075 # 0.02
-Izz = 0.0075 # 0.02
+Ixx = 0.0075 # 0.0075 # 0.02
+Iyy = 0.0075 # 0.0075 #  0.0075 # 0.02
+Izz = 0.0075 # 0.0075 # 0.02
 
 delay1 = 0
 delay = 0

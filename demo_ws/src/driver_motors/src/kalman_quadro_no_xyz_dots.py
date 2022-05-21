@@ -139,7 +139,7 @@ class Kalman:
 ], dtype = double)
         '''
         # MY EXPERIMENT (FEDOT)
-        k_phi = a_phi = k_theta = a_theta  = k_psi = a_psi = 10.0
+        k_phi = a_phi = k_theta = a_theta  = k_psi = a_psi = 10.
         
         F = array([[1.,   0.,  0., delta_time,    0., 0.,  0., 0., 0., 0.,  0.,  0.],
                    [0.,   1.,  0., 0.,   delta_time,  0., 0.,  0., 0., 0.,  0.,  0.],
