@@ -165,7 +165,7 @@ int main(int argc, char **argv)
 	ROS_INFO("Steps equal to %d", _N);
 	
 	// double t_prev = ros::Time::now().toSec();
-	double t_prev;
+	double t_prev, t_ref;
 	double T = 0.15; // [s], filter param
 	double k_f = 1. / T;
 	
@@ -276,6 +276,7 @@ int main(int argc, char **argv)
 	double _u1, _u2, _u3, _u4;
 
 	int count = 0;
+	int count_ref = 0;
 	while (ros::ok())
 	{
 		ros::spinOnce();
@@ -290,6 +291,12 @@ int main(int argc, char **argv)
 		
 		if (imuUp && camRefUp) // && camXYZUp && camVelUp && camRPYUp) // WITH CAMERA
 		{
+			//if (count_ref == 0)
+			//{
+			//	t_ref = ros::Time::now().toSec();
+			//	++count_ref;
+			//}
+
 			w_x = glob_angleVel_msg.angular_velocity.x;
 			w_y = glob_angleVel_msg.angular_velocity.y;
 			w_z = glob_angleVel_msg.angular_velocity.z;
@@ -444,15 +451,21 @@ int main(int argc, char **argv)
 			
 			double phi_ref = 0, teta_ref = 0, psi_ref = 0;
 
+			// Only for diploma plots
+			//double timelim = 5;
+			//if (ros::Time::now().toSec() - t_ref > timelim)
+			//	phi_ref = 0.3;
+
+
 			// CONTROLS
 			//teta_ref = -0.5;
-			//phi_ref = glob_camRef_msg.quaternion.y;
+			phi_ref = glob_camRef_msg.quaternion.y;
 			teta_ref = glob_camRef_msg.quaternion.z;
-			//psi_ref = glob_camRef_msg.quaternion.w;
+			psi_ref = glob_camRef_msg.quaternion.w;
 
+			//double m = 0.43, g = 9.81;
 			//_u1 = m * g; // no camera
 			_u1 = glob_camRef_msg.quaternion.x;
-			//_u2 = I_xx * (-(a_phi+k_phi)*0 - a_phi*k_phi*(0.5)); // ESC test
 			
 			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref));
 			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_pred - a_teta*k_teta*(_teta_pred-teta_ref));
@@ -469,6 +482,8 @@ int main(int argc, char **argv)
 			//_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*(_psi_stepped - psi_ref));
 			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_pred - a_psi*k_psi*(_psi_pred - psi_ref));
 			
+			cam_file << ros::Time::now() << "," << _u1 << "," << phi_ref << "," << teta_ref << "," << psi_ref << "\n";
+
 			// LIMITS
 			
 			if (!modelOn)
@@ -500,6 +515,7 @@ int main(int argc, char **argv)
 
 			_u_file << ros::Time::now() << "," << _u1 << "," << _u2 << "," << _u3 << "," << _u4 << "\n";
 			
+
 			if (_N != 0)
 			{
 				_u2_kalman_q.pop_front();

@@ -5,8 +5,8 @@ from math import sin, cos, pi, sqrt
 #from kalman_quadro import Kalman
 #from libstd import angle_to_pi
 
-from numpy import *
-
+#from numpy import *
+#import numpy as np
 
 M = 0.43    # kg
 #m_real = 0.5
@@ -16,6 +16,7 @@ MG = M * G
 Ixx = 0.0075 # 0.0075 # 0.02
 Iyy = 0.0075 # 0.0075 #  0.0075 # 0.02
 Izz = 0.0075 # 0.0075 # 0.02
+
 
 delay1 = 0
 delay = 0
@@ -66,78 +67,9 @@ class Variable_With_Delay(object):
     last = property(get_last_value)
 
 
-
-class Model_simple:
-
-    def __init__(self, x=0., y=0., z=0., psi=0., phi=0., theta=0., M = 0.4):
-        # init state
-        self.x = x
-        self.y = y
-        self.z = z
-        self.psi = psi
-        self.phi = phi
-        self.theta = theta
-
-        self.mu_x = 0.
-        self.mu_y = 0.
-
-        # init speed
-        class Desc: pass
-        self.dot = Desc()
-        self.dot.x = 0.
-        self.dot.y = 0.
-        self.dot.z = 0.
-        self.dot.psi = 0.
-        self.dot.phi = 0.
-        self.dot.theta = 0.
-
-        # init control
-        self.u = (0., 0., 0., 0.)
-
-
-    def set_control(self, u):
-        self.u = u
-
-    def step(self, dt):
-
-        # rotate
-#        self.dot.phi += (self.u[1] - (Izz - Iyy) *\
-#                 self.dot.theta * self.dot.psi) / Ixx * dt
-#        self.dot.theta += (self.u[2] - (Ixx - Izz) *\
-#                self.dot.phi * self.dot.psi) / Iyy * dt
-#        self.dot.psi += self.u[3] / Izz * dt
-
-#        self.psi += self.dot.psi * dt
-#        self.phi += self.dot.phi * dt
-#        self.theta += self.dot.theta * dt
-
-        # simple model for angles
-        self.phi = self.u[1]
-        self.theta = self.u[2]
-        self.psi = self.u[3]
-
-
-
-        # move
-        self.dot.x += ((sin(self.psi) * sin(self.phi) +\
-                cos(self.psi) * cos(self.phi) * sin(self.theta)) *\
-                self.u[0] / M - self.mu_x * self.dot.x) * dt
-        self.x += (self.dot.x) * dt
-
-        self.dot.y += ((-cos(self.psi) * sin(self.phi) +\
-                sin(self.psi) * cos(self.phi) * sin(self.theta)) *\
-                self.u[0] / M - self.mu_y * self.dot.y) * dt
-        self.y += (self.dot.y) * dt
-
-        self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - MG) /\
-                M * dt
-#        self.dot.z = 0.
-        self.z += self.dot.z * dt
-
 class Model:
 
     def __init__(self, x=0., y=0., z=0., psi=0., phi=0., theta=0., tau_psi = tau_common, tau_phi = tau_common, tau_theta = tau_common, d_psi = d_common, d_phi = d_common, d_theta = d_common, k2_psi = 1., k2_phi = k2_common, k2_theta = k2_common, weigth = M, mu = 0.):
-#    def __init__(self, x=0., y=0., z=0., psi=0., phi=0., theta=0., tau_psi = 0.1, tau_phi = 0.1, tau_theta = 0.1, M = 0.4):
 
         # init state
         self.x = x
@@ -213,18 +145,7 @@ class Model:
         self.u = u
 
     def step(self, dt):
-        '''
-        # My model
-
-        self.psi += self.dot.psi * dt
-        self.phi += self.dot.phi * dt
-        self.theta += self.dot.theta * dt
-
-        self.dot.phi += (self.u[1] - (Izz - Iyy) * self.dot.theta * self.dot.psi) / Ixx * dt
-        self.dot.theta += (self.u[2] - (Ixx - Izz) * self.dot.phi * self.dot.psi) / Iyy * dt
-        #print(f'u3={self.u[2]} dot_theta={self.dot.theta}')
-        self.dot.psi += self.u[3] / Izz * dt
-        '''
+        
        #Sasha's model
        
         # I_xx * dot_phi = u (1)
@@ -254,8 +175,9 @@ class Model:
         
         #print(f'MODEL.py dot_psi={self.dot.psi} dot_phi={self.dot.phi} dot_teta={self.dot.theta}')
         #print(f'psi={self.psi} phi={self.phi} teta={self.theta}')
-
+		
         # move
+        
         self.dot.x += ((sin(self.psi) * sin(self.phi) + cos(self.psi) * cos(self.phi) * sin(self.theta)) * self.u[0] / self.mass) * dt
         self.x += (self.dot.x) * dt
 
@@ -265,6 +187,7 @@ class Model:
         R = 0.
         if (self.z<0.3):
             R = self.mass * G
-
+		
         self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - self.mass * G + R) / self.mass * dt
         self.z += self.dot.z * dt # self.dot.z = 0.
+        

@@ -18,7 +18,6 @@ class Model {
     
     private:
 		int counter;
-		//ros::Publisher pub;
 		ros::Publisher pubImu;
 		ros::Publisher pubRef;
 		ros::Publisher pubXYZ;
@@ -64,15 +63,15 @@ class Model {
 		double phi_m, teta_m, psi_m;
 
     public:
-		static constexpr double M = 0.39; // [kg]
+		static constexpr double M = 0.43; // [kg]
 		static constexpr double G = 9.81; // [m/s^2]
 	
-		static constexpr double I_xx = 0.005; // 0.02;
-		static constexpr double I_yy = 0.005;
-		static constexpr double I_zz = 0.005;
+		static constexpr double I_xx = 0.0075; // 0.02;
+		static constexpr double I_yy = 0.0075;
+		static constexpr double I_zz = 0.0075;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0., double _phi=0.15, double _teta=-0.3, double _psi=0., double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0., double _phi=0., double _teta=0., double _psi=0., double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{

@@ -4,7 +4,9 @@ import time
 
 import numpy as np
 
-from numpy import *
+#from numpy import *
+from math import sin, cos, pi, sqrt
+
 from tf.transformations import euler_from_quaternion
 
 from model_2013 import Model, Variable_With_Delay
@@ -21,7 +23,6 @@ glob_rpy_msg = Vector3Stamped()
 glob_control_msg = QuaternionStamped()
 glob_pose_msg = PoseStamped()
 glob_remote_msg = PointStamped()
-
 
 def callbackRemote(msg):
 	global glob_remote_msg
@@ -130,8 +131,8 @@ def camera_handler():
 	model = Model(x=x0, y=y0, z=z0)
 	model_ref = Model(x=x0, y=y0, z=z0)
 	kalman = Kalman()
-	x_estimated = array([x0, y0, z0, 0., 0., 0., 0., 0., 0., 0., 0., 0.], dtype = double)
-	covariances = 0.5*eye(12)
+	x_estimated = np.array([x0, y0, z0, 0., 0., 0., 0., 0., 0., 0., 0., 0.], dtype = np.double)
+	covariances = 0.5 * np.eye(12)
 
 	control = [0.,0.,0.,0.]
 
@@ -168,6 +169,7 @@ def camera_handler():
 	timestart = rospy.get_time()
 
 	while not rospy.is_shutdown():
+		
 		dt = rospy.get_time() - time_prev
 		time_prev = rospy.get_time()
 		time_nsteps += 1
@@ -183,7 +185,6 @@ def camera_handler():
 		z_prev = z_cam
 
 		camRawData.append(f'{rospy.get_time()}, {x_cam}, {y_cam}, {z_cam}, {vx_cam}, {vy_cam}, {vz_cam}\n')
-		#camRawFile.write(f'{rospy.get_time()}, {x_cam}, {y_cam}, {z_cam}, {vx_cam}, {vy_cam}, {vz_cam}\n')
 
 		quaternion = (glob_pose_msg.pose.orientation.x, glob_pose_msg.pose.orientation.y, glob_pose_msg.pose.orientation.z, glob_pose_msg.pose.orientation.w)
 		euler = euler_from_quaternion(quaternion)
@@ -192,12 +193,11 @@ def camera_handler():
 		psi = euler[2] * 1 # from camera
 		#rospy.loginfo("psi %f", euler[2])
 		
-		camRPYRoughData.append(f'{rospy.get_time()}, {euler[0]}, {euler[1]}, {euler[2]}\n')
+		###camRPYRoughData.append(f'{rospy.get_time()}, {euler[0]}, {euler[1]}, {euler[2]}\n')
 
 		phi_dot = glob_imu_msg.angular_velocity.x * 1
 		theta_dot = glob_imu_msg.angular_velocity.y * 1
 		psi_dot = glob_imu_msg.angular_velocity.z * 1
-		#rospy.loginfo("CAMERA_HANDLER.py dot_psi=%f dot_phi=%f dot_teta=%f", psi_dot, phi_dot, theta_dot)
 
 		# SECOND DEGREE
 		d_dxy = 1.
@@ -220,7 +220,7 @@ def camera_handler():
 		#rospy.loginfo("u1=%f u2=%f u3=%f u4=%f", control[0], control[1], control[2], control[3])
 
 		
-		x_current = array([x_cam, y_cam, z_cam, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
+		x_current = np.array([x_cam, y_cam, z_cam, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = np.double)
 		#x_current = array([x_cam, y_cam, z_cam, x_cam_dot2, y_cam_dot2, z_cam_dot2, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = double)
 		
 		model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
@@ -230,14 +230,15 @@ def camera_handler():
 		n = 0
 		while n < delay1: # delay additional steps
 			model_ref.set_control([u1_q.get_index(delay1-n), u2_q.get_index(delay1-n), u3_q.get_index(delay1-n), u4_q.get_index(delay1-n)])
-			model_ref.step(0.01)
+			model_ref.step(0.01)			
 			n += 1
+		
 		camStData.append(f'{rospy.get_time()}, {model_ref.x}, {model_ref.y}, {model_ref.z}, {model_ref.dot.x}, {model_ref.dot.y}, {model_ref.dot.z}\n')
 
-		x_current_pred = array([model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = double)
+		x_current_pred = np.array([model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = np.double)
 		#x_current_pred = array([model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = double)
 		
-		x_prediction = array([model.x, model.y, model.z, model.dot.x, model.dot.y, model.dot.z, model.psi, model.phi, model.theta, model.dot.psi, model.dot.phi, model.dot.theta], dtype = double)
+		x_prediction = np.array([model.x, model.y, model.z, model.dot.x, model.dot.y, model.dot.z, model.psi, model.phi, model.theta, model.dot.psi, model.dot.phi, model.dot.theta], dtype = np.double)
 
 		x_estimated[:] = x_prediction[:]
 		
@@ -246,28 +247,27 @@ def camera_handler():
 				 
 		#rospy.loginfo("\nx=%f \ny=%f \nz=%f", x_estimated[0], x_estimated[1], x_estimated[2]);
 		camKalData.append(f'{rospy.get_time()}, {x_estimated[0]}, {x_estimated[1]}, {x_estimated[2]}, {x_estimated[3]}, {x_estimated[4]}, {x_estimated[5]}\n')
-
+		
 		# Reference
 		M = 0.43
 		g = 9.81
 
-		'''
-		timelim = 20 # [s]
-		if (rospy.get_time() - timestart) < timelim:
-			x_ref = 0.
-			y_ref = 0.
-			z_ref = 1.2
+		#timelim = 20 # [s]
+		#if (rospy.get_time() - timestart) < timelim:
+		#	x_ref = 0.
+		#	y_ref = 0.
+		#	z_ref = 1.2
 
-		if (rospy.get_time() - timestart) > timelim:
-			x_ref = 0.
-			y_ref = 0.
-			z_ref = 1.2
+		#if (rospy.get_time() - timestart) > timelim:
+		#	x_ref = 0.
+		#	y_ref = 0.
+		#	z_ref = 1.2
 				
-		if (rospy.get_time() - timestart) > 2*timelim:
-			x_ref = 0.
-			y_ref = 0.
-			z_ref = 1.2
-		'''
+		#if (rospy.get_time() - timestart) > 2*timelim:
+		#	x_ref = 0.
+		#	y_ref = 0.
+		#	z_ref = 1.2
+
 		x_ref = -0.5
 		y_ref = 0.
 		z_ref = 1.2
@@ -291,15 +291,15 @@ def camera_handler():
 			
 			#torque_ref = M * g
 			#torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
-			phi_ref = 0 * arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
-			teta_ref = 0 * arctan(H_xx / H_zz)
-				
+			phi_ref = 0 * np.arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
+			teta_ref =  np.arctan(H_xx / H_zz)
+
 			psi_ref = 0
-			#count += 1
-			#if count == 10:
-				#count = 0
-				#rospy.loginfo("H_xx=%f H_yy=%f H_zz=%f", H_xx, H_yy, H_zz)
-				#rospy.loginfo("teta_ref=%f\n", teta_ref)
+			
+			# Model plot
+			#timelim_low = 5 # [s]
+			#if (rospy.get_time() - timestart) > timelim_low:
+			#	phi_ref = 0.3
 
 		# Limits
 		modelOn = False
@@ -337,8 +337,9 @@ def camera_handler():
 		model.x, model.y, model.z, model.dot.x, model.dot.y, model.dot.z, model.psi, model.phi, model.theta, model.dot.psi, model.dot.phi, model.dot.theta = x_estimated
 		model.set_control(control)
 		model.step(dt)
-
+		
 		# Messages
+		
 		msg_ref_cam = QuaternionStamped()
 		msg_ref_cam.header.stamp = rospy.get_rostime()
 		msg_ref_cam.quaternion.x = torque_ref
@@ -346,67 +347,28 @@ def camera_handler():
 		msg_ref_cam.quaternion.z = teta_ref
 		msg_ref_cam.quaternion.w = psi_ref
 
-		msg_xyz_cam = Vector3Stamped()
-		msg_xyz_cam.header.stamp = rospy.get_rostime()
-		msg_xyz_cam.vector.x = x_estimated[0]
-		msg_xyz_cam.vector.y = x_estimated[1]
-		msg_xyz_cam.vector.z = x_estimated[2]
-		
-		
-		msg_xyz_cam2 = Vector3Stamped()
-		msg_xyz_cam2.header.stamp = rospy.get_rostime()
-		msg_xyz_cam2.vector.x = x_cam2
-		msg_xyz_cam2.vector.y = y_cam2
-		msg_xyz_cam2.vector.z = z_cam2
-		
-		
-		msg_vel_cam = Vector3Stamped()
-		msg_vel_cam.header.stamp = rospy.get_rostime()
-		msg_vel_cam.vector.x = x_estimated[3]
-		msg_vel_cam.vector.y = x_estimated[4]
-		msg_vel_cam.vector.z = x_estimated[5]
-		
-		msg_vel_cam2 = Vector3Stamped()
-		msg_vel_cam2.header.stamp = rospy.get_rostime()
-		msg_vel_cam2.vector.x = x_cam_dot2
-		msg_vel_cam2.vector.y = y_cam_dot2
-		msg_vel_cam2.vector.z = z_cam_dot2
-		
-		msg_velRough_cam = Vector3Stamped()
-		msg_velRough_cam.header.stamp = rospy.get_rostime()
-		msg_velRough_cam.vector.x = (x_cam-x_prev) / dt
-		msg_velRough_cam.vector.y = (y_cam-y_prev) / dt
-		msg_velRough_cam.vector.z = (z_cam-z_prev) / dt
-		x_prev = x_cam
-		y_prev = y_cam
-		z_prev = z_cam
-		
 		msg_rpy_cam = Vector3Stamped() # Specific order
 		msg_rpy_cam.header.stamp = rospy.get_rostime()
 		msg_rpy_cam.vector.x = x_estimated[7]
 		msg_rpy_cam.vector.y = x_estimated[8]
 		msg_rpy_cam.vector.z = x_estimated[6]
 		
-		msg_rpy_rough = Vector3Stamped() # Specific order
-		msg_rpy_rough.header.stamp = rospy.get_rostime()
-		msg_rpy_rough.vector.x = euler[0]
-		msg_rpy_rough.vector.y = euler[1]
-		msg_rpy_rough.vector.z = euler[2]
-		
-		
 
 		# Publishers
 		pubRef.publish(msg_ref_cam)
-
-		pubXYZ.publish(msg_xyz_cam)
-		pubXYZ2.publish(msg_xyz_cam2)
-		pubVel.publish(msg_vel_cam)
-		pubVel2.publish(msg_vel_cam2)
 		pubRPY.publish(msg_rpy_cam)
 		
-		pubVelRough.publish(msg_velRough_cam)
-		pubRPYRough.publish(msg_rpy_rough)
-		
+		# DEBUG
+		'''
+		msg_xyz_cam = Vector3Stamped()
+		msg_xyz_cam.header.stamp = rospy.get_rostime()
+		msg_xyz_cam.vector.x = 0
+		msg_xyz_cam.vector.y = 0
+		msg_xyz_cam.vector.z = 0
+		pubXYZ.publish(msg_xyz_cam)
+		'''
+
+
 		rate.sleep()
 
 if __name__ == '__main__':
