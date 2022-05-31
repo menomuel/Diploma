@@ -4,7 +4,6 @@ import time
 
 import numpy as np
 
-#from numpy import *
 from math import sin, cos, pi, sqrt
 
 from tf.transformations import euler_from_quaternion
@@ -58,6 +57,7 @@ camStFile = open('CAM_stepped.csv', 'w')
 camKalFile = open('CAM_kalman.csv', 'w')
 cam2degFile = open('CAM_2deg.csv', 'w')
 camRefFile = open('CAM_ref.csv', 'w')
+camHFile = open('CAM_H.csv', 'w')
 camRPYRoughFile = open('CAM_rpy_rough.csv', 'w')
 
 camRawData = []
@@ -65,6 +65,7 @@ camStData = []
 camKalData = []
 cam2degData = []
 camRefData = []
+camHData = []
 camRPYRoughData = []
 
 def dump_data():
@@ -78,6 +79,8 @@ def dump_data():
 		cam2degFile.write(line)
 	for line in camRefData:
 		camRefFile.write(line)
+	for line in camHData:
+		camHFile.write(line)
 	for line in camRPYRoughData:
 		camRPYRoughFile.write(line)
 	camRawFile.close()
@@ -85,6 +88,7 @@ def dump_data():
 	camKalFile.close()
 	cam2degFile.close()
 	camRefFile.close()
+	camHFile.close()
 	camRPYRoughFile.close()
 
 def camera_handler():
@@ -136,7 +140,7 @@ def camera_handler():
 
 	control = [0.,0.,0.,0.]
 
-	delay1 = 15 # 12 # old model - 16
+	delay1 = 10 # 12 # old model - 16
 	u1_q = Variable_With_Delay(delay=delay1)
 	u2_q = Variable_With_Delay(delay=delay1)
 	u3_q = Variable_With_Delay(delay=delay1)
@@ -193,7 +197,7 @@ def camera_handler():
 		psi = euler[2] * 1 # from camera
 		#rospy.loginfo("psi %f", euler[2])
 		
-		###camRPYRoughData.append(f'{rospy.get_time()}, {euler[0]}, {euler[1]}, {euler[2]}\n')
+		camRPYRoughData.append(f'{rospy.get_time()}, {euler[0]}, {euler[1]}, {euler[2]}\n')
 
 		phi_dot = glob_imu_msg.angular_velocity.x * 1
 		theta_dot = glob_imu_msg.angular_velocity.y * 1
@@ -215,17 +219,13 @@ def camera_handler():
 		z_cam2 += z_cam_dot2 * dt
 		
 		cam2degData.append(f'{rospy.get_time()}, {x_cam2}, {y_cam2}, {z_cam2}, {x_cam_dot2}, {y_cam_dot2}, {z_cam_dot2}\n')
-
-		#rospy.loginfo("z_cam=%f z_cam_dot=%f", z_cam, vz_cam);
-		#rospy.loginfo("u1=%f u2=%f u3=%f u4=%f", control[0], control[1], control[2], control[3])
-
 		
-		#x_current = np.array([x_cam, y_cam, z_cam, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = np.double)
-		x_current = np.array([x_cam, y_cam, z_cam, x_cam_dot2, y_cam_dot2, z_cam_dot2, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = np.double)
+		x_current = np.array([x_cam, y_cam, z_cam, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = np.double) # velocity kalman
+		#x_current = np.array([x_cam, y_cam, z_cam, x_cam_dot2, y_cam_dot2, z_cam_dot2, psi, phi, theta, psi_dot, phi_dot, theta_dot], dtype = np.double) # velocity 2deg
 		
-		#model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
-		#model_ref.dot.x, model_ref.dot.y, model_ref.dot.z = model.dot.x, model.dot.y, model.dot.z
-		model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current
+		model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current # velocity kalman
+		model_ref.dot.x, model_ref.dot.y, model_ref.dot.z = model.dot.x, model.dot.y, model.dot.z # velocity kalman
+		#model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta = x_current # velocity 2deg
 		
 		n = 0
 		while n < delay1: # delay additional steps
@@ -235,15 +235,15 @@ def camera_handler():
 		
 		camStData.append(f'{rospy.get_time()}, {model_ref.x}, {model_ref.y}, {model_ref.z}, {model_ref.dot.x}, {model_ref.dot.y}, {model_ref.dot.z}\n')
 
-		#x_current_pred = np.array([model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = np.double)
-		x_current_pred = np.array([model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = np.double)
+		x_current_pred = np.array([model_ref.x, model_ref.y, model_ref.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = np.double) # velocity kalman
+		#x_current_pred = np.array([model_ref.x, model_ref.y, model_ref.z, model_ref.dot.x, model_ref.dot.y, model_ref.dot.z, model_ref.psi, model_ref.phi, model_ref.theta, model_ref.dot.psi, model_ref.dot.phi, model_ref.dot.theta], dtype = np.double) # velocity 2deg
 		
 		x_prediction = np.array([model.x, model.y, model.z, model.dot.x, model.dot.y, model.dot.z, model.psi, model.phi, model.theta, model.dot.psi, model.dot.phi, model.dot.theta], dtype = np.double)
 
 		x_estimated[:] = x_prediction[:]
 		
-		#x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(9,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
-		x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(12,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt)
+		x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(9,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt) # velocity kalman
+		#x_estimated, covariances = kalman.step(x_estimated, covariances, x_current_pred.reshape(12,1), x_prediction.reshape(12,1), control, [model.k1_psi, model.k1_phi, model.k1_theta, model.k2_psi, model.k2_phi, model.k2_theta, model.mass], dt) # velocity 2deg
 				 
 		#rospy.loginfo("\nx=%f \ny=%f \nz=%f", x_estimated[0], x_estimated[1], x_estimated[2]);
 		camKalData.append(f'{rospy.get_time()}, {x_estimated[0]}, {x_estimated[1]}, {x_estimated[2]}, {x_estimated[3]}, {x_estimated[4]}, {x_estimated[5]}\n')
@@ -269,45 +269,43 @@ def camera_handler():
 		#	z_ref = 1.2
 
 		x_ref = 0.
-		y_ref = 0.
-		z_ref = 1.
+		y_ref = 0.2
+		z_ref = 0.8
 		
-		# Model plot HIGH
-		timelim_low = 4 # [s]
-		if (rospy.get_time() - timestart) > timelim_low:
-			x_ref = 0.3
+		
+		a_z = k_z = 4. # 1.
+		a_x = k_x = a_y = k_y = 4.
 
-		a_x = k_x = a_y = k_y = a_z = k_z = 4. # 1.
-
-		H_xx = - (a_x+k_x)*x_estimated[3] - a_x*k_x*(x_estimated[0]-x_ref) # ZERO VEL
-		H_yy = - (a_y+k_y)*x_estimated[4] - a_y*k_y*(x_estimated[1]-y_ref)
-		H_zz = - (a_z+k_z)*x_estimated[5] - a_z*k_z*(x_estimated[2]-z_ref) + g
-		# From model
-		#H_xx = - (a_x+k_x)*model_ref.dot.x - a_x*k_x*(model_ref.x-x_ref)
-		#H_yy = - (a_y+k_y)*model_ref.dot.y - a_y*k_y*(model_ref.y-y_ref)
-		#H_zz = - (a_z+k_z)*model_ref.dot.z - a_z*k_z*(model_ref.z-z_ref) + g
+		H_xx = 1. * (- (a_x+k_x)*x_estimated[3] - a_x*k_x*(x_estimated[0]-x_ref)) # ZERO VEL
+		#H_xx = 1. * (- (a_x+k_x)*x_current_pred[3] - a_x*k_x*(x_current_pred[0]-x_ref)) # ZERO VEL
+		
+		H_yy = 1. * (- (a_y+k_y)*x_estimated[4] - a_y*k_y*(x_estimated[1]-y_ref))
+		H_zz = 1. * (- (a_z+k_z)*x_estimated[5] - a_z*k_z*(x_estimated[2]-z_ref)) + g
+		
+		camHData.append(f'{rospy.get_time()}, {H_xx}, {H_yy}, {H_zz}\n')
 		
 		#rospy.loginfo("x=%f y=%f z=%f dot_x=%f dot_y=%f dot_z=%f", x_estimated[0], x_estimated[1], x_estimated[2], x_estimated[3], x_estimated[4], x_estimated[5])
 
 		if controlUp:
 			#torque_ref = M * sqrt(H_zz*H_zz)
-			#torque_ref = M * sqrt(H_zz*H_zz + H_xx*H_xx)
-			
+			#torque_ref = M * sqrt(H_zz*H_zz + H_xx*H_xx)			
 			#torque_ref = M * g
 			torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
+			
 			phi_ref = np.arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
+
 			teta_ref = np.arctan(H_xx / H_zz)
+			#timelim = 30 # [s]
+			#if (rospy.get_time() - timestart) > timelim:
+			#	teta_ref = 0.2
+			#if (rospy.get_time() - timestart) > 2*timelim:
+			#	teta_ref = -0.2
+
 
 			psi_ref = 0
 			
-			#timelim_low = 15 # [s]
-			#if (rospy.get_time() - timestart) > timelim_low:
-			#	teta_ref = 0.2
-			#if (rospy.get_time() - timestart) > 2*timelim_low:
-			#	teta_ref = -0.2
-
-			# Model plot LOW
-			#timelim_low = 1 # [s]
+			# Model plot
+			#timelim_low = 5 # [s]
 			#if (rospy.get_time() - timestart) > timelim_low:
 			#	phi_ref = 0.3
 
@@ -317,16 +315,15 @@ def camera_handler():
 			if torque_ref > glob_remote_msg.point.x:
 				torque_ref = glob_remote_msg.point.x
 		
-		ref_lim = 0.3 # flight - 0.07 (in model diverge)
-		if (phi_ref > ref_lim):
-			phi_ref = ref_lim
-		elif (phi_ref < - ref_lim):
-			phi_ref = - ref_lim
+		if (phi_ref > 0.3):
+			phi_ref = 0.3
+		elif (phi_ref < -0.3):
+			phi_ref = -0.3
 			
-		if (teta_ref > ref_lim):
-			teta_ref = ref_lim
-		elif (teta_ref < - ref_lim):
-			teta_ref = - ref_lim
+		if (teta_ref > 0.3):
+			teta_ref = 0.3
+		elif (teta_ref < -0.3):
+			teta_ref = -0.3
 		
 		if torque_ref > 8:
 			torque_ref = 8

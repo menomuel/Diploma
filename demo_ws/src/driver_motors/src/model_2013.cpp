@@ -34,6 +34,7 @@ class Model {
 		double mu_x, mu_y;
 		double mass;
 		
+		double a_x, a_y, a_z; // accelerations
 		double dot_x, dot_y, dot_z;
 		double dot_phi, dot_teta, dot_psi;
 	
@@ -137,19 +138,23 @@ class Model {
 				dot_teta += (u[2] - (I_xx - I_zz) * dot_phi * dot_psi) / I_yy * dt;
 				dot_psi += u[3] / I_zz * dt;
 				
+				a_x = (sin(psi) * sin(phi) + cos(psi) * cos(phi) * sin(teta)) * u[0] / mass;
 				dot_x += ((sin(psi) * sin(phi) + cos(psi) * cos(phi) * sin(teta)) * u[0] / mass) * dt;
 				x += dot_x * dt;
 
+				a_y = (- cos(psi) * sin(phi) + sin(psi) * cos(phi) * sin(teta)) * u[0] / mass;
 				dot_y += ((- cos(psi) * sin(phi) + sin(psi) * cos(phi) * sin(teta)) * u[0] / mass) * dt;
 				y += dot_y * dt;
 
 				double R = 0;
 				if (z < 0.22)
 					R = mass * G;
+				a_z = (cos(phi) * cos(teta) * u[0] - mass * G + R) / mass;
 				dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
 				z += dot_z * dt;
 
 				// Calculate references
+				/*
 				double m = M; // [kg]
 				double g = G; // [m/s^2]
 
@@ -165,7 +170,7 @@ class Model {
                 teta_ref = std::atan2(H_xx, H_zz);
                 phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
 				psi_ref = 0;
-
+				*/
 			}
 		}
 		
@@ -238,7 +243,7 @@ class Model {
 			msg_imu.angular_velocity.y = dot_teta_m;
 			msg_imu.angular_velocity.z = dot_psi_m;
 			msg_imu.linear_acceleration.x = phi_m;
-			msg_imu.linear_acceleration.y = teta_m;
+			msg_imu.linear_acceleration.y = teta_m; // Shift!
 			msg_imu.linear_acceleration.z = psi_m;
 			pubImu.publish(msg_imu);
 

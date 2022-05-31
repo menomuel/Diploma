@@ -152,7 +152,7 @@ class Model:
         # u = I_xx * [ - (a_phi + k_phi) * dot_phi - a_phi * k_phi * (phi - phi_ref)) (2)
         # dot_phi = u / I_xx = - (a_phi + k_phi) * dot_phi - a_phi * k_phi * (phi - phi_ref)
         
-        k_phi = a_phi = k_theta = a_theta = k_psi = a_psi = 10.
+        k_phi = a_phi = k_theta = a_theta = k_psi = a_psi = 5.
        
         self.dot.phi += (- (a_phi + k_phi) * self.dot.phi - (a_phi * k_phi) * (self.phi - self.u[1])) * dt
         self.dot.theta += (- (a_theta + k_theta) * self.dot.theta - (a_theta * k_theta) * (self.theta - self.u[2])) * dt
@@ -185,7 +185,7 @@ class Model:
         self.y += (self.dot.y) * dt
 
         R = 0.
-        if (self.z < 0.22):
+        if (self.z<0.3):
             R = self.mass * G
 		
         self.dot.z += (cos(self.phi) * cos(self.theta) * self.u[0] - self.mass * G + R) / self.mass * dt

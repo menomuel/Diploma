@@ -120,6 +120,9 @@ int main(int argc, char **argv)
 	_u_file.open("_u_13_04_model_phi1e-1.csv");
 	cam_file.open("cam_13_04_model_phi1e-1.csv");
 	
+	std::ofstream rpyf_file;
+	rpyf_file.open("rpyf_13_04_model_phi1e-1.csv");
+	
 	ros::Subscriber subRPY = n.subscribe("/imu/rpy/filtered", 1, rpyCallback);
 	ros::Subscriber subAngleVel = n.subscribe("/imu/data_raw", 1, angleVelCallback); //with filter subscribe on /imu/data!
 	ros::Subscriber subRemote = n.subscribe("/remote", 1, remoteCallback);
@@ -157,7 +160,7 @@ int main(int argc, char **argv)
 	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
 	double k_teta, a_teta, k_phi, a_phi, k_psi, a_psi;
-	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 5.; // flight - 5.0, model - 16.0; 
+	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 10; // flight - 5.0, model - 16.0; 
 	
 	double dt = 1./200;
 	double dt_fwd = 1./200; 
@@ -204,15 +207,15 @@ int main(int argc, char **argv)
 	
 	Eigen::Matrix4d _Q;
 	_Q << param_qw, 0, 0, 0, 
-			  0, param_qw/10, 0, 0,
+			  0, param_qw, 0, 0,
 			  0, 0, param_qa, 0,
-			  0, 0, 0, param_qa/10;
+			  0, 0, 0, param_qa;
 	
 	Eigen::Matrix4d _R;
 	_R << param_rw, 0, 0, 0, 
 			  0, param_rw/10, 0, 0,
 			  0, 0, param_ra*10, 0,
-			  0, 0, 0, param_ra/10*10;
+			  0, 0, 0, param_ra/10*1;
 	
 	const double _p = 0.1; 
 	Eigen::Matrix4d _Px;
@@ -287,7 +290,7 @@ int main(int argc, char **argv)
 		double dt_filter = ros::Time::now().toSec() - t_prev;
 		t_prev = ros::Time::now().toSec();
 
-		bool modelOn = false;
+		bool modelOn = true;
 		
 		if (imuUp && camRefUp) // && camXYZUp && camVelUp && camRPYUp) // WITH CAMERA
 		{
@@ -304,6 +307,7 @@ int main(int argc, char **argv)
 			teta = glob_angleVel_msg.linear_acceleration.y;
 			psi = glob_angleVel_msg.linear_acceleration.z;			
 
+			/*
 			if (!modelOn)
 			{
 				if (psi > 20)
@@ -311,7 +315,8 @@ int main(int argc, char **argv)
 				else if (psi < 4)
 					psi = 4;
 			}
-		
+			*/
+			
 			w_x_measure = w_x;
 			w_y_measure = w_y;
 			w_z_measure = w_z;
@@ -340,17 +345,27 @@ int main(int argc, char **argv)
 			} else
 			{				
 				// ??????? atan2 valid ???????
+				/*
 				phi_measure = std::atan2(teta, psi);
 				teta_measure = - std::atan2(phi, psi);
 				phi_pf = std::atan2(acc_filter_val_y, acc_filter_val_z);
 				teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
+				*/
+				
+				/// ALTERNATIVE
+				phi_measure = std::atan2(teta, sqrt(phi*phi + psi*psi));
+				teta_measure = - std::atan2(phi, sqrt(teta*teta + psi*psi));
+				phi_pf = std::atan2(acc_filter_val_y, sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
+				teta_pf = - std::atan2(acc_filter_val_x, sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
 			}
 			psi_measure = glob_camRPY_msg.vector.z; // from camera
 			
 						
-			dr_file << glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << w_z_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure << "\n";
+			dr_file << glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << w_z_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure << ","
+			<< phi << "," << teta << "," << psi << "\n";
 			dpf_file << ros::Time::now() << "," << w_x_pf << "," << w_y_pf << "," << w_z_pf << "," << phi_pf << "," << teta_pf << "," << psi_pf << "\n";
 
+			rpyf_file << glob_rpy_msg.header.stamp << "," <<  glob_rpy_msg.vector.x << "," << glob_rpy_msg.vector.y << "," << glob_rpy_msg.vector.z << "\n";
 		
 			// STEP
 			_w_x_stepped = w_x_measure;
@@ -496,7 +511,7 @@ int main(int argc, char **argv)
 			if (_u1 > 8)
 				_u1 = 8;
 			
-			double ulim = 0.15; // model - 0.5, flight - 0.15;
+			double ulim = 0.5; // model - 0.5, flight - 0.15;
 			double unorm = sqrt(_u2*_u2+_u3*_u3);	
 			if (unorm > ulim)
 			{
@@ -587,6 +602,8 @@ int main(int argc, char **argv)
 	_dm_file.close();
 	_u_file.close();
 	cam_file.close();
+	
+	rpyf_file.close();
 
 	return 0;
 }
