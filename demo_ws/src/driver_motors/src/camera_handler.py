@@ -117,7 +117,7 @@ def camera_handler():
 
 	x0 = 0.
 	y0 = 0.
-	z0 = 0. # was 0!
+	z0 = 0.22 # was 0!
 
 	#while not imuUp and cameraUp:
 	#	pass
@@ -268,14 +268,14 @@ def camera_handler():
 		#	y_ref = 0.
 		#	z_ref = 1.2
 
-		x_ref = 0.
-		y_ref = 0.
+		x_ref = 0.3
+		y_ref = -0.2
 		z_ref = 1.
 		
 		# Model plot HIGH
-		timelim_low = 4 # [s]
-		if (rospy.get_time() - timestart) > timelim_low:
-			x_ref = 0.3
+		#timelim_low = 4 # [s]
+		#if (rospy.get_time() - timestart) > timelim_low:
+		#	x_ref = 0.4
 
 		a_x = k_x = a_y = k_y = a_z = k_z = 4. # 1.
 

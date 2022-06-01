@@ -45,7 +45,10 @@ void angleVelCallback(const sensor_msgs::Imu& msg)
 {
 	glob_angleVel_msg = msg;
 	if (!imuUp)
-		imuUp = true;
+	{
+		//if (fabs(msg.linear_acceleration.z) > 1e-2) // if data from imu valid (a_z ~ g)
+			imuUp = true;
+	}
 	//ROS_INFO("Receive angular velocity {%.1f, %.1f, %.1f}", msg.angular_velocity.x,
 	//														msg.angular_velocity.y,
 	//														msg.angular_velocity.z);
@@ -306,16 +309,7 @@ int main(int argc, char **argv)
 			phi = glob_angleVel_msg.linear_acceleration.x;
 			teta = glob_angleVel_msg.linear_acceleration.y;
 			psi = glob_angleVel_msg.linear_acceleration.z;			
-
-			/*
-			if (!modelOn)
-			{
-				if (psi > 20)
-					psi = 20;
-				else if (psi < 4)
-					psi = 4;
-			}
-			*/
+			//ROS_INFO("%f %f %f", phi, teta, psi);
 			
 			w_x_measure = w_x;
 			w_y_measure = w_y;
@@ -337,7 +331,7 @@ int main(int argc, char **argv)
 			double w_z_pf = gyro_filter_val_z;
 
 			double phi_pf = 0, teta_pf = 0, psi_pf = 0;
-			if (modelOn)
+			if (0 == 1)
 			{
 				phi_pf = acc_filter_val_x;
 				teta_pf = acc_filter_val_y;
@@ -345,18 +339,34 @@ int main(int argc, char **argv)
 			} else
 			{				
 				// ??????? atan2 valid ???????
-				/*
-				phi_measure = std::atan2(teta, psi);
-				teta_measure = - std::atan2(phi, psi);
-				phi_pf = std::atan2(acc_filter_val_y, acc_filter_val_z);
-				teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
-				*/
+				
+				//phi_measure = std::atan2(teta, psi);
+				//teta_measure = - std::atan2(phi, psi);
+				//phi_pf = std::atan2(acc_filter_val_y, acc_filter_val_z);
+				//teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
+				
+				//phi_measure = std::atan(teta / psi);
+				//teta_measure = - std::atan(phi / psi);
+				//phi_pf = std::atan(acc_filter_val_y / acc_filter_val_z);
+				//teta_pf = - std::atan(acc_filter_val_x / acc_filter_val_z);
 				
 				/// ALTERNATIVE
-				phi_measure = std::atan2(teta, sqrt(phi*phi + psi*psi));
-				teta_measure = - std::atan2(phi, sqrt(teta*teta + psi*psi));
-				phi_pf = std::atan2(acc_filter_val_y, sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
-				teta_pf = - std::atan2(acc_filter_val_x, sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
+				if (sqrt(phi*phi+teta*teta+psi*psi) > 1e-2)
+				{
+					//phi_measure = std::atan(teta / sqrt(phi*phi + psi*psi));
+					//teta_measure = - std::atan(phi / sqrt(teta*teta + psi*psi));
+					//phi_pf = std::atan(acc_filter_val_y / sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
+					//teta_pf = - std::atan(acc_filter_val_x / sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
+
+
+					// ALTERNATIVE CHECK
+					phi_measure = - std::atan(teta / sqrt(phi*phi + psi*psi));
+					teta_measure = std::atan(phi / sqrt(teta*teta + psi*psi));
+					phi_pf = - std::atan(acc_filter_val_y / sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
+					teta_pf = std::atan(acc_filter_val_x / sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
+
+					//ROS_INFO("acc=(%f %f %f) %f %f %f %f", phi, teta, psi, phi_measure, teta_measure, phi_pf, teta_pf);
+				}
 			}
 			psi_measure = glob_camRPY_msg.vector.z; // from camera
 			
@@ -495,7 +505,7 @@ int main(int argc, char **argv)
 			//_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)); // ZERO
 			
 			//_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*(_psi_stepped - psi_ref));
-			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_pred - a_psi*k_psi*(_psi_pred - psi_ref));
+			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_pred - a_psi*k_psi*(_psi_pred - psi_ref)) * 0;
 			
 			cam_file << ros::Time::now() << "," << _u1 << "," << phi_ref << "," << teta_ref << "," << psi_ref << "\n";
 

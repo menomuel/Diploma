@@ -60,6 +60,7 @@ class Model {
 		double sigma_angle;
 
 		// IMU output
+		double a_x_m, a_y_m, a_z_m;
 		double dot_phi_m, dot_teta_m, dot_psi_m;
 		double phi_m, teta_m, psi_m;
 
@@ -72,7 +73,7 @@ class Model {
 		static constexpr double I_zz = 0.0075;
     
     public:
-		Model(double _x=0, double _y=0, double _z=0., double _phi=0., double _teta=0., double _psi=0., double weight=M, double mu = 0) :
+		Model(double _x=0, double _y=0, double _z=0.22, double _phi=0., double _teta=0., double _psi=0., double weight=M, double mu = 0) :
 			x(_x), y(_y), z(_z), vx(0), vy(0), vz(0), phi(_phi), teta(_teta), psi(_psi), mu_x(mu), mu_y(mu), mass(weight),
 			dot_x(0), dot_y(0), dot_z(0), dot_phi(0), dot_teta(0), dot_psi(0)
 		{
@@ -149,28 +150,14 @@ class Model {
 				double R = 0;
 				if (z < 0.22)
 					R = mass * G;
-				a_z = (cos(phi) * cos(teta) * u[0] - mass * G + R) / mass;
+				//a_z = (- mass * G + R) / mass - G; // KOSTYL!!!
+				//a_z *= -1;
+				a_z = (cos(phi) * cos(teta) * u[0] - mass * G + R) / mass + G;
 				dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
 				z += dot_z * dt;
+				//ROS_INFO("(%f %f %f) %f %f %f %f", a_x, a_y, a_z, cos(phi), teta, cos(teta), u[0]);
+				//ROS_INFO("(%f %f %f) teta_model=%f teta_m = %f z=%f", a_x, a_y, a_z, teta, std::atan2(a_x, a_z), z);
 
-				// Calculate references
-				/*
-				double m = M; // [kg]
-				double g = G; // [m/s^2]
-
-				double x_ref = -0.3, y_ref = -0.3, z_ref = 1.;
-				double a_x, k_x, a_y, k_y, a_z, k_z;
-				a_x = k_x = a_y = k_y = a_z = k_z = 4.;
-
-				double H_xx = - (a_x+k_x)*dot_x - a_x*k_x*(x-x_ref);
-				double H_yy = - (a_y+k_y)*dot_y - a_y*k_y*(y-y_ref);
-            	double H_zz = - (a_z+k_z)*dot_z - a_z*k_z*(z-z_ref) + g;
-
-				torque_ref = m * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz);
-                teta_ref = std::atan2(H_xx, H_zz);
-                phi_ref = std::atan2(-H_yy, sqrt(H_xx*H_xx + H_zz*H_zz));
-				psi_ref = 0;
-				*/
 			}
 		}
 		
@@ -208,6 +195,10 @@ class Model {
             dot_phi_m += d_w(gen);
             dot_teta_m += d_w(gen);
             dot_psi_m += d_w(gen);
+
+			//a_x_m += d_a(gen);
+			//a_y_m += d_a(gen);
+			//a_z_m += d_a(gen);
             phi_m += d_a(gen);
             teta_m += d_a(gen);
             psi_m += d_a(gen);
@@ -224,11 +215,12 @@ class Model {
 			step(dt);
 
 			// Data disturbances
+			a_x_m = a_x, a_y_m = a_y, a_z_m = a_z;
 			dot_phi_m = dot_phi, dot_teta_m = dot_teta, dot_psi_m = dot_psi;
 			phi_m = phi, teta_m = teta, psi_m = psi;
 
-			add_delay_imu();
-			add_noise_imu(sigma_dot_angle, sigma_angle);
+			//add_delay_imu();
+			//add_noise_imu(sigma_dot_angle, sigma_angle);
 
 
 			//ROS_INFO("Controls (%f, %f, %f, %f)", u[0], u[1], u[2], u[3]);
@@ -242,15 +234,22 @@ class Model {
 			msg_imu.angular_velocity.x = dot_phi_m;
 			msg_imu.angular_velocity.y = dot_teta_m;
 			msg_imu.angular_velocity.z = dot_psi_m;
-			msg_imu.linear_acceleration.x = phi_m;
-			msg_imu.linear_acceleration.y = teta_m; // Shift!
-			msg_imu.linear_acceleration.z = psi_m;
+			//msg_imu.linear_acceleration.x = phi_m;
+			//msg_imu.linear_acceleration.y = teta_m;
+			//msg_imu.linear_acceleration.z = psi_m;
+			
+			msg_imu.linear_acceleration.x = a_x_m;
+			msg_imu.linear_acceleration.y = a_y_m;
+			msg_imu.linear_acceleration.z = a_z_m;
+
 			pubImu.publish(msg_imu);
 
 			++counter;
-			 if (counter == 15) // 300/15=20hz //if (true)
+			if (counter == 15) // 300/15=20hz //if (true)
 			{
 				counter = 0;
+
+				//ROS_INFO("%f %f %f", a_x, a_y, a_z);
 
 				// CAMERA MESSAGE
 				geometry_msgs::QuaternionStamped msg_ref;
