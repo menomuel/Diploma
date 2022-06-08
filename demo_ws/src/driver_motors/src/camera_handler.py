@@ -168,6 +168,9 @@ def camera_handler():
 	
 	timestart = rospy.get_time()
 
+	remote = 0
+	remote_timestart = rospy.get_time()
+
 	while not rospy.is_shutdown():
 		
 		dt = rospy.get_time() - time_prev
@@ -268,14 +271,15 @@ def camera_handler():
 		#	y_ref = 0.
 		#	z_ref = 1.2
 
-		x_ref = 0.3
-		y_ref = -0.2
+		x_ref = 0.
+		y_ref = 0.
 		z_ref = 1.
 		
-		# Model plot HIGH
-		#timelim_low = 4 # [s]
+		#Model plot HIGH
+		#timelim_low = 5 # [s]
 		#if (rospy.get_time() - timestart) > timelim_low:
-		#	x_ref = 0.4
+		#	x_ref = 0.2
+		#	y_ref = -0.3
 
 		a_x = k_x = a_y = k_y = a_z = k_z = 4. # 1.
 
@@ -297,10 +301,29 @@ def camera_handler():
 			torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
 			phi_ref = np.arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
 			teta_ref = np.arctan(H_xx / H_zz)
-
 			psi_ref = 0
+						
+			# Let take height
+			'''
+			if (rospy.get_time() - timestart) < 5:
+				torque_ref = 1.1 * M * g
+				phi_ref = 0
+				teta_ref = 0
+			'''
 			
-			#timelim_low = 15 # [s]
+			
+			if torque_ref > remote:
+				torque_ref = remote
+			remote_step = 0.5
+			remote_timeout = 5.
+			remote_timelim = remote_timeout / 5 * remote_step
+			if (rospy.get_time() - remote_timestart) > remote_timelim:
+				remote += remote_step
+				remote_timestart = rospy.get_time()
+			
+			
+
+			#timelim_low = 5 # [s]
 			#if (rospy.get_time() - timestart) > timelim_low:
 			#	teta_ref = 0.2
 			#if (rospy.get_time() - timestart) > 2*timelim_low:
@@ -315,9 +338,9 @@ def camera_handler():
 		modelOn = True
 		if not modelOn:
 			if torque_ref > glob_remote_msg.point.x:
-				torque_ref = glob_remote_msg.point.x
-		
-		ref_lim = 0.3 # flight - 0.07 (in model diverge)
+				torque_ref = glob_remote_msg.point.x		
+
+		ref_lim = 0.5 # 1 (in model diverge)
 		if (phi_ref > ref_lim):
 			phi_ref = ref_lim
 		elif (phi_ref < - ref_lim):

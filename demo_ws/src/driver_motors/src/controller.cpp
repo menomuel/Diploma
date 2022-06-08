@@ -150,7 +150,8 @@ int main(int argc, char **argv)
 	ros::Publisher _chatter_pub_mod = n.advertise<sensor_msgs::Imu>("/imu/_data_mod", 1);
 	ros::Publisher _chatter_rpy_pred = n.advertise<geometry_msgs::Vector3Stamped>("/imu/rpy/_predicted", 1);
 
-	ros::Rate loop_rate(200);
+	int rate = 200;
+	ros::Rate loop_rate(rate);
 
 	//double m = 0.4; // [kg]
 	//double g = 9.81; // [m/c^2]
@@ -159,20 +160,20 @@ int main(int argc, char **argv)
 	double I_yy = 0.0075; // 0.0075; // 0.0075; //0.0464; // [kg*m^2] or 0.01
 	double I_zz = 0.0075; // 0.0075;
 
-	double k_x, a_x, k_y, a_y, k_z, a_z;
-	k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
+	//double k_x, a_x, k_y, a_y, k_z, a_z;
+	//k_x = a_x = k_y = a_y = k_z = a_z = 4.0;
 
 	double k_teta, a_teta, k_phi, a_phi, k_psi, a_psi;
-	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 10; // flight - 5.0, model - 16.0; 
+	k_teta = a_teta = k_phi = a_phi = k_psi = a_psi = 10; // flight - 10.0, model - 16.0; 
 	
-	double dt = 1./200;
-	double dt_fwd = 1./200; 
+	double dt = 1./rate;
+	double dt_fwd = 1./rate; 
 	int _N = _param_N;
 	ROS_INFO("Steps equal to %d", _N);
 	
 	// double t_prev = ros::Time::now().toSec();
 	double t_prev, t_ref;
-	double T = 0.15; // [s], filter param
+	double T = 0.5; // [s], filter param
 	double k_f = 1. / T;
 	
 	// PYTHON
@@ -183,12 +184,18 @@ int main(int argc, char **argv)
 	double w_z = 0.;
 	double psi = 0.;
 	
+	double acc_x = 0;
+	double acc_y = 0;
+	double acc_z = 0;
+	
 	double acc_filter_val_x = 0;
 	double acc_filter_val_y = 0;
 	double acc_filter_val_z = 0;
 	double gyro_filter_val_x = 0;
 	double gyro_filter_val_y = 0;
 	double gyro_filter_val_z = 0;
+	
+	double phi_pf = 0, teta_pf = 0, psi_pf = 0;
 	
 	double w_x_measure, phi_measure;
 	double w_y_measure, teta_measure;
@@ -214,11 +221,13 @@ int main(int argc, char **argv)
 			  0, 0, param_qa, 0,
 			  0, 0, 0, param_qa;
 	
+	/*
 	Eigen::Matrix4d _R;
 	_R << param_rw, 0, 0, 0, 
 			  0, param_rw/10, 0, 0,
 			  0, 0, param_ra*10, 0,
 			  0, 0, 0, param_ra/10*1;
+	*/
 	
 	const double _p = 0.1; 
 	Eigen::Matrix4d _Px;
@@ -232,7 +241,23 @@ int main(int argc, char **argv)
 			  0, 0, _p, 0,
 			  0, 0, 0, _p;
 			  
-	Eigen::Matrix4d _H = Eigen::MatrixXd::Identity(4, 4);
+	/*
+	Eigen::Matrix4d _H;
+	_H << 1., 0, 0, 0, // was 1. in angle vel
+			0, 1., 0, 0,
+			0, 0, 1., 0, // was 1. in angle
+			0, 0, 0, 1.;
+	*/	
+			
+	
+	/// NO DATA FROM IMU (ONLY LPF)
+	Eigen::Matrix2d _R;
+	_R << param_rw/10, 0,
+				0, param_ra/10*1;
+	
+	Eigen::MatrixXd _H(2, 4);
+	 _H << 0, 1, 0, 0,
+				0, 0, 0, 1;
 	
 	/// FOR YAW
 	Eigen::Matrix3d _Fz;
@@ -306,73 +331,93 @@ int main(int argc, char **argv)
 			w_x = glob_angleVel_msg.angular_velocity.x;
 			w_y = glob_angleVel_msg.angular_velocity.y;
 			w_z = glob_angleVel_msg.angular_velocity.z;
-			phi = glob_angleVel_msg.linear_acceleration.x;
-			teta = glob_angleVel_msg.linear_acceleration.y;
-			psi = glob_angleVel_msg.linear_acceleration.z;			
+			//phi = glob_angleVel_msg.linear_acceleration.x;
+			//teta = glob_angleVel_msg.linear_acceleration.y;
+			//psi = glob_angleVel_msg.linear_acceleration.z;		
+			acc_x = glob_angleVel_msg.linear_acceleration.x;
+			acc_y = glob_angleVel_msg.linear_acceleration.y;
+			acc_z = glob_angleVel_msg.linear_acceleration.z;			
 			//ROS_INFO("%f %f %f", phi, teta, psi);
 			
 			w_x_measure = w_x;
 			w_y_measure = w_y;
 			w_z_measure = w_z;
-			phi_measure = phi;
-			teta_measure = teta;
-			psi_measure = psi;
+			//phi_measure = phi;
+			//teta_measure = teta;
+			//psi_measure = psi;
+			
 			
 			// PREFILTER
+			/*
 			acc_filter_val_x = acc_filter_val_x - 1/T * (acc_filter_val_x -  phi_measure) * dt_filter;
 			gyro_filter_val_x = gyro_filter_val_x - 1/T * (gyro_filter_val_x -  w_x_measure) * dt_filter;
 			acc_filter_val_y = acc_filter_val_y - 1/T * (acc_filter_val_y -  teta_measure) * dt_filter;
 			gyro_filter_val_y = gyro_filter_val_y - 1/T * (gyro_filter_val_y -  w_y_measure) * dt_filter;
 			acc_filter_val_z = acc_filter_val_z - 1/T * (acc_filter_val_z -  psi_measure) * dt_filter;
 			gyro_filter_val_z = gyro_filter_val_z - 1/T * (gyro_filter_val_z -  w_z_measure) * dt_filter;
+			*/
+
+			acc_filter_val_x = acc_filter_val_x - 1/T * (acc_filter_val_x -  acc_x) * dt_filter;
+			gyro_filter_val_x = gyro_filter_val_x - 1/T * (gyro_filter_val_x -  w_x_measure) * dt_filter;
+			acc_filter_val_y = acc_filter_val_y - 1/T * (acc_filter_val_y -  acc_y) * dt_filter;
+			gyro_filter_val_y = gyro_filter_val_y - 1/T * (gyro_filter_val_y -  w_y_measure) * dt_filter;
+			acc_filter_val_z = acc_filter_val_z - 1/T * (acc_filter_val_z -  acc_z) * dt_filter;
+			gyro_filter_val_z = gyro_filter_val_z - 1/T * (gyro_filter_val_z -  w_z_measure) * dt_filter;
 
 			double w_x_pf = gyro_filter_val_x;
 			double w_y_pf = gyro_filter_val_y;
 			double w_z_pf = gyro_filter_val_z;
-
-			double phi_pf = 0, teta_pf = 0, psi_pf = 0;
-			if (0 == 1)
+					
+			// ??????? atan2 valid ???????
+			
+			//phi_measure = std::atan2(teta, psi);
+			//teta_measure = - std::atan2(phi, psi);
+			//phi_pf = std::atan2(acc_filter_val_y, acc_filter_val_z);
+			//teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
+			
+			//phi_measure = std::atan(teta / psi);
+			//teta_measure = - std::atan(phi / psi);
+			//phi_pf = std::atan(acc_filter_val_y / acc_filter_val_z);
+			//teta_pf = - std::atan(acc_filter_val_x / acc_filter_val_z);
+			
+			/*
+			if (sqrt(phi*phi+teta*teta+psi*psi) > 1e-2)
 			{
-				phi_pf = acc_filter_val_x;
-				teta_pf = acc_filter_val_y;
-				psi_pf = acc_filter_val_z;
-			} else
-			{				
-				// ??????? atan2 valid ???????
-				
-				//phi_measure = std::atan2(teta, psi);
-				//teta_measure = - std::atan2(phi, psi);
-				//phi_pf = std::atan2(acc_filter_val_y, acc_filter_val_z);
-				//teta_pf = - std::atan2(acc_filter_val_x, acc_filter_val_z);
-				
-				//phi_measure = std::atan(teta / psi);
-				//teta_measure = - std::atan(phi / psi);
-				//phi_pf = std::atan(acc_filter_val_y / acc_filter_val_z);
-				//teta_pf = - std::atan(acc_filter_val_x / acc_filter_val_z);
-				
-				/// ALTERNATIVE
-				if (sqrt(phi*phi+teta*teta+psi*psi) > 1e-2)
-				{
-					//phi_measure = std::atan(teta / sqrt(phi*phi + psi*psi));
-					//teta_measure = - std::atan(phi / sqrt(teta*teta + psi*psi));
-					//phi_pf = std::atan(acc_filter_val_y / sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
-					//teta_pf = - std::atan(acc_filter_val_x / sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
+				phi_measure = std::atan(teta / sqrt(phi*phi + psi*psi));
+				teta_measure = - std::atan(phi / sqrt(teta*teta + psi*psi));
+				phi_pf = std::atan(acc_filter_val_y / sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
+				teta_pf = - std::atan(acc_filter_val_x / sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
 
+				// ALTERNATIVE CHECK
+				//phi_measure = - std::atan(teta / sqrt(phi*phi + psi*psi));
+				//teta_measure = std::atan(phi / sqrt(teta*teta + psi*psi));
+				//phi_pf = - std::atan(acc_filter_val_y / sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
+				//teta_pf = std::atan(acc_filter_val_x / sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
 
-					// ALTERNATIVE CHECK
-					phi_measure = - std::atan(teta / sqrt(phi*phi + psi*psi));
-					teta_measure = std::atan(phi / sqrt(teta*teta + psi*psi));
-					phi_pf = - std::atan(acc_filter_val_y / sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
-					teta_pf = std::atan(acc_filter_val_x / sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
-
-					//ROS_INFO("acc=(%f %f %f) %f %f %f %f", phi, teta, psi, phi_measure, teta_measure, phi_pf, teta_pf);
-				}
+				//ROS_INFO("acc=(%f %f %f) %f %f %f %f", phi, teta, psi, phi_measure, teta_measure, phi_pf, teta_pf);
 			}
+			*/
+			double g = 9.81;
+			double accel_norm_sq = acc_x*acc_x+acc_y*acc_y+acc_z*acc_z;
+			double upper_accel_limit = 1.1 * g;
+			double lower_accel_limit = 0.5 * g;
+			//if (accel_norm_sq > lower_accel_limit*lower_accel_limit &&
+			//	 accel_norm_sq < upper_accel_limit*upper_accel_limit)
+			if (accel_norm_sq > lower_accel_limit*lower_accel_limit)
+			{
+				phi_measure = std::atan(acc_y / sqrt(acc_x*acc_x + acc_z*acc_z));
+				teta_measure = - std::atan(acc_x / sqrt(acc_y*acc_y + acc_z*acc_z));
+				phi_pf = std::atan(acc_filter_val_y / sqrt(acc_filter_val_x*acc_filter_val_x + acc_filter_val_z*acc_filter_val_z));
+				teta_pf = - std::atan(acc_filter_val_x / sqrt(acc_filter_val_y*acc_filter_val_y + acc_filter_val_z*acc_filter_val_z));
+			}
+			
 			psi_measure = glob_camRPY_msg.vector.z; // from camera
 			
 						
+			//dr_file << glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << w_z_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure << ","
+			//<< phi << "," << teta << "," << psi << "\n";
 			dr_file << glob_angleVel_msg.header.stamp << "," << w_x_measure << "," << w_y_measure << "," << w_z_measure << "," << phi_measure << "," << teta_measure << "," << psi_measure << ","
-			<< phi << "," << teta << "," << psi << "\n";
+			<< acc_x << "," << acc_y << "," << acc_z << "\n";
 			dpf_file << ros::Time::now() << "," << w_x_pf << "," << w_y_pf << "," << w_z_pf << "," << phi_pf << "," << teta_pf << "," << psi_pf << "\n";
 
 			rpyf_file << glob_rpy_msg.header.stamp << "," <<  glob_rpy_msg.vector.x << "," << glob_rpy_msg.vector.y << "," << glob_rpy_msg.vector.z << "\n";
@@ -412,17 +457,23 @@ int main(int argc, char **argv)
 			 << "," << _w_x_pf_stepped << "," << _w_y_pf_stepped << "," << _phi_pf_stepped << "," << _teta_pf_stepped << "\n";
 			
 			// KALMAN FILTER-4
+			
 			/// x-axis
 			Eigen::Vector4d _Xx_k_prev {_w_x_pred, _w_x_pf_pred, _phi_pred, _phi_pf_pred};
 			Eigen::Vector4d _Xx_k = _F * _Xx_k_prev + _Bx * _u2_kalman;
 
 			_Px = _F * _Px * _F.transpose() + _Q;
 
-			Eigen::Vector4d _Zx_k {_w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped};
-			Eigen::Vector4d _Yx_k = _Zx_k - _H * _Xx_k;
+			//Eigen::Vector4d _Zx_k {_w_x_stepped, _w_x_pf_stepped, _phi_stepped, _phi_pf_stepped};
+			//Eigen::Vector4d _Yx_k = _Zx_k - _H * _Xx_k;
+			Eigen::Vector2d _Zx_k {_w_x_pf_stepped, _phi_pf_stepped};
+			Eigen::Vector2d _Yx_k = _Zx_k - _H * _Xx_k;
 
-			Eigen::Matrix4d _Sx_k = _H * _Px * _H.transpose() + _R;
-			Eigen::Matrix4d _Kx_k = _Px * _H.transpose() * _Sx_k.inverse();
+			//Eigen::Matrix4d _Sx_k = _H * _Px * _H.transpose() + _R;
+			//Eigen::Matrix4d _Kx_k = _Px * _H.transpose() * _Sx_k.inverse();
+			Eigen::Matrix2d _Sx_k = _H * _Px * _H.transpose() + _R;
+			Eigen::MatrixXd _Kx_k(4, 2);
+			_Kx_k = _Px * _H.transpose() * _Sx_k.inverse();
 
 			_Xx_k += _Kx_k * _Yx_k;
 			_Px = (Eigen::MatrixXd::Identity(4, 4) - _Kx_k * _H) * _Px;
@@ -438,11 +489,16 @@ int main(int argc, char **argv)
 
 			_Py = _F * _Py * _F.transpose() + _Q;
 
-			Eigen::Vector4d _Zy_k {_w_y_stepped, _w_y_pf_stepped, _teta_stepped, _teta_pf_stepped};
-			Eigen::Vector4d _Yy_k = _Zy_k - _H * _Xy_k;
+			//Eigen::Vector4d _Zy_k {_w_y_stepped, _w_y_pf_stepped, _teta_stepped, _teta_pf_stepped};
+			//Eigen::Vector4d _Yy_k = _Zy_k - _H * _Xy_k;
+			Eigen::Vector2d _Zy_k {_w_y_pf_stepped, _teta_pf_stepped};
+			Eigen::Vector2d _Yy_k = _Zy_k - _H * _Xy_k;
 
-			Eigen::Matrix4d _Sy_k = _H * _Py * _H.transpose() + _R;
-			Eigen::Matrix4d _Ky_k = _Py * _H.transpose() * _Sy_k.inverse();
+			//Eigen::Matrix4d _Sy_k = _H * _Py * _H.transpose() + _R;
+			//Eigen::Matrix4d _Ky_k = _Py * _H.transpose() * _Sy_k.inverse();
+			Eigen::Matrix2d _Sy_k = _H * _Py * _H.transpose() + _R;
+			Eigen::MatrixXd _Ky_k(4, 2);
+			_Ky_k = _Py * _H.transpose() * _Sy_k.inverse();
 
 			_Xy_k += _Ky_k * _Yy_k;
 			_Py = (Eigen::MatrixXd::Identity(4, 4) - _Ky_k * _H) * _Py;
@@ -494,23 +550,26 @@ int main(int argc, char **argv)
 			
 			_u2 = I_xx * (-(a_phi+k_phi)*_w_x_pred - a_phi*k_phi*(_phi_pred-phi_ref));
 			_u3 = I_yy * (-(a_teta+k_teta)*_w_y_pred - a_teta*k_teta*(_teta_pred-teta_ref));
+			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_pred - a_psi*k_psi*(_psi_pred - psi_ref));
+
 
 			//_u2 = I_xx * (-(a_phi+k_phi)*w_x_measure - a_phi*k_phi*(phi_measure-phi_ref));
 			//_u3 = I_yy * (-(a_teta+k_teta)*w_y_measure - a_teta*k_teta*(teta_measure-teta_ref));
 			
 			//_u2 = I_xx * (-(a_phi+k_phi)*w_x_pf - a_phi*k_phi*(phi_pf-phi_ref));
 			//_u3 = I_yy * (-(a_teta+k_teta)*w_y_pf - a_teta*k_teta*(teta_pf-teta_ref));
+			//_u4 = I_zz * (-(a_psi+k_psi)*w_z_pf - a_psi*k_psi*(psi_pf - psi_ref));
 			
 			//_u2 = I_xx * (-(a_phi+k_phi)*_w_x_stepped - a_phi*k_phi*(_phi_stepped-phi_ref)); // ZERO replaced _w_x_pred
 			//_u3 = I_yy * (-(a_teta+k_teta)*_w_y_stepped - a_teta*k_teta*(_teta_stepped-teta_ref)); // ZERO
 			
 			//_u4 = I_zz * (-(a_psi+k_psi)*_w_z_stepped - a_psi*k_psi*(_psi_stepped - psi_ref));
-			_u4 = I_zz * (-(a_psi+k_psi)*_w_z_pred - a_psi*k_psi*(_psi_pred - psi_ref)) * 0;
 			
 			cam_file << ros::Time::now() << "," << _u1 << "," << phi_ref << "," << teta_ref << "," << psi_ref << "\n";
 
 			// LIMITS
 			
+			/*
 			if (!modelOn)
 			{
 				_u1 = _u1 < glob_remote_msg.point.x ? _u1 : glob_remote_msg.point.x;
@@ -520,6 +579,7 @@ int main(int argc, char **argv)
 			
 			if (_u1 > 8)
 				_u1 = 8;
+			*/
 			
 			double ulim = 0.5; // model - 0.5, flight - 0.15;
 			double unorm = sqrt(_u2*_u2+_u3*_u3);	
@@ -559,6 +619,7 @@ int main(int argc, char **argv)
 			msg.quaternion.z = _u3;
 			msg.quaternion.w = _u4;
 			
+			/*
 			sensor_msgs::Imu msg_pf;
 			msg_pf.header.stamp = ros::Time::now();
 			msg_pf.linear_acceleration.x = acc_filter_val_x;
@@ -579,24 +640,26 @@ int main(int argc, char **argv)
 			_msg_rpy_stepped.vector.x = _phi_stepped;
 			_msg_rpy_stepped.vector.y = _teta_stepped;
 			_msg_rpy_stepped.vector.z = _psi_stepped;
+			*/
 			
+			// THE TRUE OPTIONIS HERE!
 			sensor_msgs::Imu _msg_mod;
 			_msg_mod.header.stamp = ros::Time::now();
 			_msg_mod.angular_velocity.x = _w_x_pred;
 			_msg_mod.angular_velocity.y = _w_y_pred;
-			_msg_mod.angular_velocity.z = _w_z_stepped; // stepped!
+			_msg_mod.angular_velocity.z = _w_z_pred;
 			
 			geometry_msgs::Vector3Stamped _msg_rpy_pred;
 			_msg_rpy_pred.header.stamp = ros::Time::now();
 			_msg_rpy_pred.vector.x = _phi_pred;
 			_msg_rpy_pred.vector.y = _teta_pred;
-			_msg_rpy_pred.vector.z = _psi_stepped; // stepped
+			_msg_rpy_pred.vector.z = _psi_pred;
 			
 			// PUBLISHERS			
 			chatter_pub.publish(msg);
-			chatter_imu_prefilter.publish(msg_pf);
-			_chatter_imu_stepped.publish(_msg_st);
-			_chatter_rpy_stepped.publish(_msg_rpy_stepped);
+			//chatter_imu_prefilter.publish(msg_pf);
+			//_chatter_imu_stepped.publish(_msg_st);
+			//_chatter_rpy_stepped.publish(_msg_rpy_stepped);
 		
 			_chatter_pub_mod.publish(_msg_mod);
 			_chatter_rpy_pred.publish(_msg_rpy_pred);

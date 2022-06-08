@@ -37,7 +37,7 @@ int main(int argc, char **argv)
   while (ros::ok())
   {
 	char c = getch();
-	double step = 0.25;
+	double step = 0.5; // 0.25
 	double stepRoll = 0.2;
 	double stepPitch = 0.2;
 	switch (c)

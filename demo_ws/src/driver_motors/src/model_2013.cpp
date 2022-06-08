@@ -55,6 +55,11 @@ class Model {
     	std::deque<double> _psi_delay_q;
     	std::deque<double> _w_z_delay_q;
 
+		std::deque<double> a_x_delay_q;
+		std::deque<double> a_y_delay_q;
+		std::deque<double> a_z_delay_q;
+
+
 		// Noise
 		double sigma_dot_angle;
 		double sigma_angle;
@@ -110,6 +115,9 @@ class Model {
 			_psi_delay_q = std::deque<double>(_delay_N, 0);
 			_w_z_delay_q = std::deque<double>(_delay_N, 0);
 			
+			a_x_delay_q = std::deque<double>(_delay_N, 0);
+			a_y_delay_q = std::deque<double>(_delay_N, 0);
+			a_z_delay_q = std::deque<double>(_delay_N, 0);
 			
 			subControls = nh->subscribe("/controls", 1,	&Model::callback_controls, this);
 			
@@ -152,7 +160,7 @@ class Model {
 					R = mass * G;
 				//a_z = (- mass * G + R) / mass - G; // KOSTYL!!!
 				//a_z *= -1;
-				a_z = (cos(phi) * cos(teta) * u[0] - mass * G + R) / mass + G;
+				a_z = (cos(phi) * cos(teta) * u[0] - mass * G + R) / mass + G; // add G!
 				dot_z += ((cos(phi) * cos(teta) * u[0] - mass * G + R) / mass) * dt;
 				z += dot_z * dt;
 				//ROS_INFO("(%f %f %f) %f %f %f %f", a_x, a_y, a_z, cos(phi), teta, cos(teta), u[0]);
@@ -184,6 +192,17 @@ class Model {
 				_w_z_delay_q.pop_front();
 				_psi_delay_q.push_back(psi);
 				_w_z_delay_q.push_back(dot_psi);
+
+				// Accelerometer
+				a_x_m = a_x_delay_q.front();
+				a_x_delay_q.pop_front();
+				a_x_delay_q.push_back(a_x);
+				a_y_m = a_y_delay_q.front();
+				a_y_delay_q.pop_front();
+				a_y_delay_q.push_back(a_y);
+				a_z_m = a_z_delay_q.front();
+				a_z_delay_q.pop_front();
+				a_z_delay_q.push_back(a_z);
 			}
 		}
 		
@@ -195,13 +214,13 @@ class Model {
             dot_phi_m += d_w(gen);
             dot_teta_m += d_w(gen);
             dot_psi_m += d_w(gen);
-
-			//a_x_m += d_a(gen);
-			//a_y_m += d_a(gen);
-			//a_z_m += d_a(gen);
-            phi_m += d_a(gen);
+			phi_m += d_a(gen);
             teta_m += d_a(gen);
             psi_m += d_a(gen);
+
+			a_x_m += d_a(gen);
+			a_y_m += d_a(gen);
+			a_z_m += d_a(gen);
 		}
 
 		void callback_timer(const ros::TimerEvent& event) {
@@ -219,8 +238,8 @@ class Model {
 			dot_phi_m = dot_phi, dot_teta_m = dot_teta, dot_psi_m = dot_psi;
 			phi_m = phi, teta_m = teta, psi_m = psi;
 
-			//add_delay_imu();
-			//add_noise_imu(sigma_dot_angle, sigma_angle);
+			add_delay_imu();
+			add_noise_imu(sigma_dot_angle, sigma_angle);
 
 
 			//ROS_INFO("Controls (%f, %f, %f, %f)", u[0], u[1], u[2], u[3]);
@@ -238,9 +257,9 @@ class Model {
 			//msg_imu.linear_acceleration.y = teta_m;
 			//msg_imu.linear_acceleration.z = psi_m;
 			
-			msg_imu.linear_acceleration.x = a_x_m;
-			msg_imu.linear_acceleration.y = a_y_m;
-			msg_imu.linear_acceleration.z = a_z_m;
+			msg_imu.linear_acceleration.x = - 1. * a_x_m;
+			msg_imu.linear_acceleration.y = - 1. * a_y_m;
+			msg_imu.linear_acceleration.z = 1. * a_z_m;
 
 			pubImu.publish(msg_imu);
 
