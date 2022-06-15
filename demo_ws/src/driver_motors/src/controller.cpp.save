@@ -1,3 +1,5 @@
+
+
 #include <ros/ros.h>
 
 #include <geometry_msgs/Point.h>
@@ -382,7 +384,7 @@ int main(int argc, char **argv)
 			if (accel_norm_sq > lower_accel_limit*lower_accel_limit)
 			{
 				double bias_phi = -0.05;
-				double bias_teta = 0.05; // 0.1; // 0.04
+				double bias_teta = 0.1; // 0.04
 				
 				phi_measure = std::atan(acc_y / sqrt(acc_x*acc_x + acc_z*acc_z));
 				teta_measure = - std::atan(acc_x / sqrt(acc_y*acc_y + acc_z*acc_z));
