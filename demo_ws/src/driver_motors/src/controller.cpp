@@ -246,8 +246,10 @@ int main(int argc, char **argv)
 	
 	/// NO DATA FROM IMU (ONLY LPF)
 	Eigen::Matrix2d _R;
-	_R << param_rw/10, 0,
-				0, param_ra/10*1;
+	//_R << param_rw/10, 0,
+	//			0, param_ra/10*1;
+	_R << param_rw, 0,
+				0, param_ra;
 	
 	Eigen::MatrixXd _H(2, 4);
 	 _H << 0, 1, 0, 0,

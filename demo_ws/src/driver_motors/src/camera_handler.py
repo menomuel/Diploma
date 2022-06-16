@@ -273,8 +273,8 @@ def camera_handler():
 			z_ref = 1.2
 		'''
 
-		x_ref = -0.3
-		y_ref = 0.
+		x_ref = -0.3 # 0
+		y_ref = 0
 		z_ref = 1.2
 		
 		#Model plot HIGH
@@ -293,12 +293,12 @@ def camera_handler():
 
 		if controlUp:
 			#torque_ref = M * sqrt(H_zz*H_zz)
-			#torque_ref = M * sqrt(H_zz*H_zz + H_xx*H_xx)
+			torque_ref = M * sqrt(H_zz*H_zz + H_xx*H_xx)
 			
 			#torque_ref = M * g
-			torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
-			phi_ref = np.arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
-			teta_ref = np.arctan(H_xx / H_zz)
+			#torque_ref = M * sqrt(H_xx*H_xx + H_yy*H_yy + H_zz*H_zz)
+			phi_ref = 0 # np.arctan(- H_yy / sqrt(H_xx*H_xx + H_zz*H_zz))
+			teta_ref = np.arctan(H_xx / H_zz) # -0.2
 			psi_ref = 0
 			
 			# Only on model
@@ -314,10 +314,14 @@ def camera_handler():
 			'''
 			
 			'''
-			timelim_low = 20 # [s]
+			timelim_low = 6 # [s]
 			if (rospy.get_time() - timestart) > timelim_low:
 				teta_ref = 0.2
 			if (rospy.get_time() - timestart) > 2*timelim_low:
+				teta_ref = -0.2
+			if (rospy.get_time() - timestart) > 3*timelim_low:
+				teta_ref = 0.2
+			if (rospy.get_time() - timestart) > 4*timelim_low:
 				teta_ref = -0.2
 			'''
 			
